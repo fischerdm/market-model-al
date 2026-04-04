@@ -20,7 +20,8 @@ The real dataset is treated as the competitor's actual tariff. The goal is to le
    - Fit **LightGBM** on `Premium ~ features` on all rows (including all renewal years) → this becomes the **oracle** (the competitor's pricing engine)
    - Validate the oracle with SHAP to confirm actuarially sensible factor effects
    - Validate the copula fit across earlier renewal years (lightweight: marginal overlays) as a sanity check that the learned distribution is reasonably stationary
-   - Excluded from oracle features: claim outcome columns (`Cost_claims_year`, `N_claims_year`, `N_claims_history`, `R_Claims_history`) — not observable at quote time; also raw date columns (engineer to ages/durations instead)
+   - Excluded from oracle features: `Cost_claims_year`, `N_claims_year` — current-year claim outcomes, not observable at quote time. Also raw date columns (engineer to ages/durations instead)
+   - `N_claims_history` and `R_Claims_history` are observable at quote time (declared by customer on aggregators like comparis.ch), but excluded for simplicity. Could be added in a later iteration.
 
 2. **Synthetic world (Phase 2 output)**
    - The copula + oracle together simulate the competitor's quoting engine: generate any profile, get a quote
