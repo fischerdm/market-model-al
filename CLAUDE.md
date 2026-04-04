@@ -4,6 +4,8 @@
 
 A simulation of the *competitor model* use case in non-life insurance pricing: an insurer scrapes competitor quotes from aggregator websites and trains a model on them. This project builds a controlled synthetic environment to test active learning (AL) query strategies, where the ground truth is known.
 
+The end deliverable is a **Streamlit dashboard** that lets users explore and compare AL query strategies interactively.
+
 ## Architecture decisions
 
 ### Dataset
@@ -11,41 +13,32 @@ Lledó, Josep; Pavía, Jose M. (2024), *Dataset of an actual motor vehicle insur
 
 Chosen because it contains an actual `Premium` (net premium) column — a direct proxy for a competitor quote. No frequency/severity modelling needed.
 
-### Three-phase pipeline
+### Two-phase pipeline
 
-The real dataset is treated as the competitor's actual tariff. The goal is to learn it well enough to simulate a quoting engine, then test how efficiently an AL strategy can recover that engine from a limited scraping budget.
+The real dataset is treated as the competitor's actual tariff. The oracle learns it. The AL loop tests how efficiently a competitor model can recover it.
 
-1. **Learn from real data (Phases 1 & 2)**
-   - Fit a **Gaussian copula** on one row per policy (latest renewal) → the feature distribution represents the competitor's book of business
-   - Fit **LightGBM** on `Premium ~ features` on all rows (including all renewal years) → this becomes the **oracle** (the competitor's pricing engine)
-   - Validate the oracle with SHAP to confirm actuarially sensible factor effects
-   - Validate the copula fit across earlier renewal years (lightweight: marginal overlays) as a sanity check that the learned distribution is reasonably stationary
-   - Excluded from oracle features: `Cost_claims_year`, `N_claims_year` — current-year claim outcomes, not observable at quote time. Also raw date columns (engineer to ages/durations instead)
-   - `N_claims_history` and `R_Claims_history` are observable at quote time (declared by customer on aggregators like comparis.ch), but excluded for simplicity. Could be added in a later iteration.
+1. **Oracle (Phase 1)**
+   - Fit **LightGBM** on `Premium ~ features` on all rows (including all renewal years) → the **oracle** (the competitor's pricing engine)
+   - Validate oracle curves for actuarial plausibility: `driver_age` shape, key interactions — goal is "reasonably good", not perfect; the oracle only needs to be a credible synthetic tariff for testing the AL loop
+   - Excluded features: `Cost_claims_year`, `N_claims_year` — current-year outcomes, not observable at quote time
+   - `N_claims_history` and `R_Claims_history` also excluded — in practice scraping is done with claim history set to 0 (standardised input on aggregators like comparis.ch), so this matches real-world scraping behaviour
+   - Raw date columns engineered to ages/durations instead
 
-2. **Synthetic world (Phase 2 output)**
-   - The copula + oracle together simulate the competitor's quoting engine: generate any profile, get a quote
-   - Drifts (oracle weight perturbations representing competitor repricings) deferred to a later extension
-
-3. **AL simulation loop (Phase 3)**
-   - Warm start: ~50k labeled profiles, mix of:
-     - Random samples from the copula
-     - Ceteris paribus profiles: select real profiles from the sample, vary one factor at a time (others held constant) — equivalent to one-way analyses
+2. **AL simulation loop (Phase 2)**
+   - Profile pool: the real dataset rows (no generative model needed — 105k rows is sufficient)
+   - Warm start: ~50k labeled profiles drawn from the pool (random sample + ceteris paribus profiles)
    - Train the competitor model on the warm-start budget
    - Apply an AL query strategy to select next profiles → label via oracle → retrain → repeat
    - Multiple AL strategies implemented and compared (uncertainty sampling, error-based, SHAP divergence); no prior preference
    - Track convergence in MSE and SHAP structure similarity to the oracle
 
-### Generative model choice
-Start simple: **Gaussian copula + parametric marginals** (e.g. SDV `GaussianCopulaSynthesizer`). The synthetic world only needs to represent interesting relationships, not perfectly replicate reality.
-
-Alternatives considered but deferred:
-- **CTGAN / TVAE** — better at complex non-linear dependencies in mixed-type tabular data, but a black box; revisit if the copula fails to capture important structure
+### No copula / generative model
+The copula was dropped. The real dataset (~105k rows) is large enough to serve as the profile pool directly. Drawing from real data is simpler and more principled — those profiles represent the true feature distribution by definition.
 
 ### SHAP
 Used in two places:
-- On the **oracle** — validate the learned tariff structure looks actuarially sensible
+- On the **oracle** — validate the learned tariff structure looks actuarially sensible (driver age curve, vehicle age, power, interactions)
 - On the **competitor model** — track recovery of the oracle's SHAP structure across AL iterations (a richer convergence metric than MSE alone)
 
 ## Stack
-Python 3.12, LightGBM, SHAP, SDV (copula synthesis). All notebooks are `.py` files (numbered), not `.ipynb`.
+Python 3.12, LightGBM, SHAP, Streamlit. All notebooks are `.py` files (numbered), not `.ipynb`.
