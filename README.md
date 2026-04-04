@@ -1,25 +1,43 @@
 # Recursive Model Improvement via Active Learning in Non-Life Pricing
 
-Active learning simulation for non-life pricing, using the **freMTPL2** French motor TPL dataset as a proxy for competitor model scraping (e.g. as done on aggregators like comparis.ch).
+Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *nanny model*.
 
 ## Concept
 
-In non-life insurance pricing, a *nanny model* (or competitor model) can be trained by scraping quoted premiums from aggregator websites. This project simulates that iterative process:
+An insurer can train a competitor model by scraping quoted premiums from aggregator platforms. This project simulates that iterative process in a controlled synthetic environment where the ground truth is known.
 
-1. Train a model on observed data
-2. Measure accuracy / uncertainty
-3. Generate new profiles (active learning query strategy)
-4. Re-train and repeat
+The simulation runs in three phases:
+
+### Phase 1 — Learn from real data
+
+- Fit a **Gaussian copula** to the joint feature distribution of real motor policies
+- Fit a **LightGBM regression** on `Premium ~ features` → this becomes the **oracle** (the "true" competitor tariff)
+- Dataset: Lledó, Josep; Pavía, Jose M. (2024), *Dataset of an actual motor vehicle insurance portfolio*, Mendeley Data V2, [doi: 10.17632/5cxyb5fp4f.2](https://doi.org/10.17632/5cxyb5fp4f.2)
+- The oracle's structure is analysed with **SHAP** to validate it looks actuarially sensible
+
+### Phase 2 — Synthetic world
+
+- Sample unlimited policy profiles from the copula
+- Label them using the oracle (± noise)
+- Controlled drifts can be injected: shift feature marginals, perturb oracle weights
+- Known ground truth enables objective measurement of AL performance
+
+### Phase 3 — Active learning loop
+
+1. Start with a small labeled budget (sampled oracle quotes)
+2. Train the nanny model on observed profiles
+3. Apply an AL query strategy to select the next profiles to query
+4. Re-label via the oracle and retrain
+5. Repeat — tracking convergence in MSE and SHAP structure similarity to the oracle
 
 ## Project structure
 
 ```
 nanny-model/
 ├── data/
-│   ├── raw/          # freMTPL2freq.csv, freMTPL2sev.csv (not committed)
-│   └── processed/    # engineered datasets
+│   ├── raw/          # Lledó & Pavía (2024) data (not committed)
+│   └── processed/    # engineered datasets and synthetic samples
 ├── notebooks/        # analysis scripts (numbered)
-│   └── 01_shap_interaction_analysis.py
 ├── src/
 │   └── nanny_model/  # reusable Python package
 ├── outputs/
@@ -48,10 +66,4 @@ pip install -e ".[dev]"
 
 ## Data
 
-Download from [Kaggle – French Motor Claims Datasets freMTPL2](https://www.kaggle.com/datasets/floser/french-motor-claims-datasets-fremtpl2freq) and place the two CSVs in `data/raw/`.
-
-## Usage
-
-```bash
-python notebooks/01_shap_interaction_analysis.py
-```
+Download the dataset from [Mendeley Data — doi: 10.17632/5cxyb5fp4f.2](https://doi.org/10.17632/5cxyb5fp4f.2) and place the file(s) in `data/raw/`.
