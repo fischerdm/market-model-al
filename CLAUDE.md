@@ -13,9 +13,27 @@ Chosen because it contains an actual `Premium` (net premium) column — a direct
 
 ### Three-phase pipeline
 
-1. **Learn from real data** — fit a generative model to the joint feature distribution; fit LightGBM on `Premium ~ features` as the **oracle** (the "true" competitor tariff)
-2. **Synthetic world** — sample unlimited profiles from the generative model, label with the oracle; inject controlled drifts (feature marginal shifts, oracle weight perturbations)
-3. **AL simulation loop** — start with a small labeled budget, apply a query strategy, retrain the nanny model, repeat; track convergence in MSE and SHAP structure similarity to the oracle
+The real dataset is treated as the competitor's actual tariff. The goal is to learn it well enough to simulate a quoting engine, then test how efficiently an AL strategy can recover that engine from a limited scraping budget.
+
+1. **Learn from real data (Phases 1 & 2)**
+   - Fit a **Gaussian copula** on one row per policy (latest renewal) → the feature distribution represents the competitor's book of business
+   - Fit **LightGBM** on `Premium ~ features` on all rows (including all renewal years) → this becomes the **oracle** (the competitor's pricing engine)
+   - Validate the oracle with SHAP to confirm actuarially sensible factor effects
+   - Validate the copula fit across earlier renewal years (lightweight: marginal overlays) as a sanity check that the learned distribution is reasonably stationary
+   - Excluded from oracle features: claim outcome columns (`Cost_claims_year`, `N_claims_year`, `N_claims_history`, `R_Claims_history`) — not observable at quote time; also raw date columns (engineer to ages/durations instead)
+
+2. **Synthetic world (Phase 2 output)**
+   - The copula + oracle together simulate the competitor's quoting engine: generate any profile, get a quote
+   - Drifts (oracle weight perturbations representing competitor repricings) deferred to a later extension
+
+3. **AL simulation loop (Phase 3)**
+   - Warm start: ~50k labeled profiles, mix of:
+     - Random samples from the copula
+     - Ceteris paribus profiles: select real profiles from the sample, vary one factor at a time (others held constant) — equivalent to one-way analyses
+   - Train the nanny model on the warm-start budget
+   - Apply an AL query strategy to select next profiles → label via oracle → retrain → repeat
+   - Multiple AL strategies implemented and compared (uncertainty sampling, error-based, SHAP divergence); no prior preference
+   - Track convergence in MSE and SHAP structure similarity to the oracle
 
 ### Generative model choice
 Start simple: **Gaussian copula + parametric marginals** (e.g. SDV `GaussianCopulaSynthesizer`). The synthetic world only needs to represent interesting relationships, not perfectly replicate reality.
