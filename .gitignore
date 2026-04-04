@@ -10,8 +10,10 @@ build/
 data/raw/
 data/processed/
 
-# Outputs
-outputs/
+# Outputs — track folder structure only, not generated artifacts
+outputs/**
+!outputs/**/
+!outputs/**/.gitkeep
 
 # Jupyter
 .ipynb_checkpoints/
