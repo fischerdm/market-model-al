@@ -30,6 +30,8 @@ nanny-model/
 
 ## Setup
 
+**Prerequisites:** [pyenv](https://github.com/pyenv/pyenv) must be installed (`brew install pyenv`) to manage the Python version.
+
 Pin the Python version for this project (creates a `.python-version` file):
 
 ```bash
