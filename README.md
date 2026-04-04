@@ -1,4 +1,4 @@
-# nanny-model
+# Recursive Model Improvement via Active Learning in Non-Life Pricing
 
 Active learning simulation for non-life pricing, using the **freMTPL2** French motor TPL dataset as a proxy for competitor model scraping (e.g. as done on aggregators like comparis.ch).
 
