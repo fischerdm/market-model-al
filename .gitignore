@@ -19,3 +19,6 @@ outputs/
 
 # macOS
 .DS_Store
+
+# pyenv — commit this to pin the Python version for the project
+# .python-version

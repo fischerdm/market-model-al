@@ -30,8 +30,16 @@ nanny-model/
 
 ## Setup
 
+Pin the Python version for this project (creates a `.python-version` file):
+
 ```bash
-python -m venv .venv
+pyenv local 3.12.8
+```
+
+Create and activate the virtual environment:
+
+```bash
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ```
