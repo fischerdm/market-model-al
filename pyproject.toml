@@ -3,12 +3,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "nanny-model"
+name = "market-model-al"
 version = "0.1.0"
-description = "Active learning simulation using freMTPL2 as a proxy for competitor model scraping in non-life pricing"
+description = "Active learning simulation for non-life pricing: recovering a competitor's pricing engine from scraped quotes"
 requires-python = ">=3.9"
 dependencies = [
-    "nannyml>=0.13",
+    "sdv>=1.0",
     "lightgbm>=3.3",
     "shap>=0.40",
     "pandas>=1.5",

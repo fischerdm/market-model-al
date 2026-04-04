@@ -1,6 +1,6 @@
 # Recursive Model Improvement via Active Learning in Non-Life Pricing
 
-Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *nanny model*.
+Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *competitor model*.
 
 ## Concept
 
@@ -8,7 +8,7 @@ An insurer can train a competitor model by scraping quoted premiums from aggrega
 
 The simulation runs in three phases:
 
-The real dataset is treated as the competitor's actual tariff. The copula and oracle together simulate a competitor's quoting engine: generate any policy profile, get a quote. The AL loop then tests how efficiently a nanny model can recover that engine from a limited scraping budget.
+The real dataset is treated as the competitor's actual tariff. The copula and oracle together simulate a competitor's quoting engine: generate any policy profile, get a quote. The AL loop then tests how efficiently a competitor model can recover that engine from a limited scraping budget.
 
 ### Phases 1 & 2 — Learn the competitor's quoting engine
 
@@ -22,7 +22,7 @@ The real dataset is treated as the competitor's actual tariff. The copula and or
 ### Phase 3 — Active learning loop
 
 1. Warm start: ~50k labeled profiles — random copula samples + ceteris paribus profiles (select base profiles from the sample, vary one factor at a time)
-2. Train the nanny model on the warm-start budget
+2. Train the competitor model on the warm-start budget
 3. Apply an AL query strategy to identify the next profiles to query
 4. Label via the oracle and retrain
 5. Repeat — tracking convergence in MSE and SHAP structure similarity to the oracle
@@ -31,16 +31,16 @@ The real dataset is treated as the competitor's actual tariff. The copula and or
 ## Project structure
 
 ```
-nanny-model/
+market-model-al/
 ├── data/
-│   ├── raw/          # Lledó & Pavía (2024) data (not committed)
-│   └── processed/    # engineered datasets and synthetic samples
-├── notebooks/        # analysis scripts (numbered)
+│   ├── raw/              # Lledó & Pavía (2024) data (not committed)
+│   └── processed/        # engineered datasets and synthetic samples
+├── notebooks/            # analysis scripts (numbered)
 ├── src/
-│   └── nanny_model/  # reusable Python package
+│   └── market_model_al/  # reusable Python package
 ├── outputs/
-│   ├── figures/      # saved plots
-│   └── models/       # saved model artefacts
+│   ├── figures/          # saved plots
+│   └── models/           # saved model artefacts
 └── pyproject.toml
 ```
 

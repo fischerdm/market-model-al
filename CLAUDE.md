@@ -2,7 +2,7 @@
 
 ## What this project is
 
-A simulation of the *nanny model* use case in non-life insurance pricing: an insurer scrapes competitor quotes from aggregator websites and trains a model on them. This project builds a controlled synthetic environment to test active learning (AL) query strategies, where the ground truth is known.
+A simulation of the *competitor model* use case in non-life insurance pricing: an insurer scrapes competitor quotes from aggregator websites and trains a model on them. This project builds a controlled synthetic environment to test active learning (AL) query strategies, where the ground truth is known.
 
 ## Architecture decisions
 
@@ -30,7 +30,7 @@ The real dataset is treated as the competitor's actual tariff. The goal is to le
    - Warm start: ~50k labeled profiles, mix of:
      - Random samples from the copula
      - Ceteris paribus profiles: select real profiles from the sample, vary one factor at a time (others held constant) — equivalent to one-way analyses
-   - Train the nanny model on the warm-start budget
+   - Train the competitor model on the warm-start budget
    - Apply an AL query strategy to select next profiles → label via oracle → retrain → repeat
    - Multiple AL strategies implemented and compared (uncertainty sampling, error-based, SHAP divergence); no prior preference
    - Track convergence in MSE and SHAP structure similarity to the oracle
@@ -44,7 +44,7 @@ Alternatives considered but deferred:
 ### SHAP
 Used in two places:
 - On the **oracle** — validate the learned tariff structure looks actuarially sensible
-- On the **nanny model** — track recovery of the oracle's SHAP structure across AL iterations (a richer convergence metric than MSE alone)
+- On the **competitor model** — track recovery of the oracle's SHAP structure across AL iterations (a richer convergence metric than MSE alone)
 
 ## Stack
 Python 3.12, LightGBM, SHAP, SDV (copula synthesis). All notebooks are `.py` files (numbered), not `.ipynb`.

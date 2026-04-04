@@ -2,7 +2,7 @@
 freMTPL2 – SHAP Interaction Analysis
 =====================================
 Preliminary analysis of feature interactions in the French motor TPL dataset.
-This forms the basis for the nanny model / active learning pipeline.
+This forms the basis for the competitor model / active learning pipeline.
 
 Data: https://www.kaggle.com/datasets/floser/french-motor-claims-datasets-fremtpl2freq
 Place freMTPL2freq.csv and freMTPL2sev.csv in data/raw/ before running.
