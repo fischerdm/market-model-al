@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Active learning simulation for non-life pricing: recovering a competitor's pricing engine from scraped quotes"
 requires-python = ">=3.9"
 dependencies = [
-    "sdv>=1.0",
+    "streamlit>=1.30",
     "lightgbm>=3.3",
     "shap>=0.40",
     "pandas>=1.5",
