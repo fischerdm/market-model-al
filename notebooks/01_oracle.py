@@ -50,10 +50,10 @@ print(f"Oracle training set: {len(X):,} rows, {len(FEATURES)} features")
 
 params = {
     "objective":          "regression",
-    "learning_rate":      0.05,
-    "num_leaves":         64,
-    "min_child_samples":  50,
-    "n_estimators":       500,
+    "learning_rate":      0.02,
+    "num_leaves":         128,
+    "min_child_samples":  20,
+    "n_estimators":       2000,
     "verbose":            -1,
 }
 
