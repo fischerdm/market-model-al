@@ -6,27 +6,28 @@ Active learning simulation for non-life pricing, modelling the process of scrapi
 
 An insurer can train a competitor model by scraping quoted premiums from aggregator platforms. This project simulates that iterative process in a controlled synthetic environment where the ground truth is known.
 
-The simulation runs in three phases:
+The real dataset is treated as the competitor's actual tariff. A LightGBM oracle learns that tariff and can return a premium for any policy profile — simulating the function of an aggregator like comparis.ch. The AL loop then tests how efficiently a competitor model can recover the oracle from a limited scraping budget.
 
-The real dataset is treated as the competitor's actual tariff. The copula and oracle together simulate a competitor's quoting engine: generate any policy profile, get a quote. The AL loop then tests how efficiently a competitor model can recover that engine from a limited scraping budget.
+The end deliverable is a **Streamlit dashboard** for interactively exploring and comparing AL query strategies.
 
-### Phases 1 & 2 — Learn the competitor's quoting engine
+### Phase 1 — Oracle: learn the competitor's pricing engine
 
-- Fit a **Gaussian copula** on one row per policy (latest renewal) → represents the competitor's book of business
 - Fit a **LightGBM oracle** on `Premium ~ features` across all renewal years → the competitor's pricing engine
 - Dataset: Lledó, Josep; Pavía, Jose M. (2024), *Dataset of an actual motor vehicle insurance portfolio*, Mendeley Data V2, [doi: 10.17632/5cxyb5fp4f.2](https://doi.org/10.17632/5cxyb5fp4f.2)
-- Validate oracle structure with **SHAP** (actuarial sanity check)
-- Validate copula fit across earlier renewal years (marginal overlays — sanity check only)
-- Drifts representing competitor repricings deferred to a later extension
+- Validate oracle structure with **SHAP dependence plots** (driver age curve, vehicle power, key interactions — actuarial sanity check)
 
-### Phase 3 — Active learning loop
+### Phase 2 — Active learning loop
 
-1. Warm start: ~50k labeled profiles — random copula samples + ceteris paribus profiles (select base profiles from the sample, vary one factor at a time)
+The profile pool is built by taking real rows as anchor points and varying continuous features in small steps (e.g. `driver_age` 18→70, keeping all other features fixed) — mirroring how scraping is done in practice on aggregators. The oracle labels every generated profile.
+
+1. Warm start: ~50k labeled profiles from the pool
 2. Train the competitor model on the warm-start budget
 3. Apply an AL query strategy to identify the next profiles to query
 4. Label via the oracle and retrain
 5. Repeat — tracking convergence in MSE and SHAP structure similarity to the oracle
 6. Multiple AL strategies compared: uncertainty sampling, error-based, SHAP divergence
+
+**Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own?
 
 ## Project structure
 
@@ -35,12 +36,12 @@ market-model-al/
 ├── data/
 │   ├── raw/              # Lledó & Pavía (2024) data (not committed)
 │   └── processed/        # engineered datasets and synthetic samples
-├── notebooks/            # analysis scripts (numbered)
+├── notebooks/            # analysis scripts (numbered .py files)
 ├── src/
 │   └── market_model_al/  # reusable Python package
 ├── outputs/
-│   ├── figures/          # saved plots
-│   └── models/           # saved model artefacts
+│   ├── figures/          # saved plots (not committed)
+│   └── models/           # saved model artefacts (not committed)
 └── pyproject.toml
 ```
 
