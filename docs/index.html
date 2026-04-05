@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recursive Model Improvement via Active Learning in Non-Life Pricing</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      color: #1a1a2e;
+      background: #f8f9fb;
+    }
+
+    /* ── header ── */
+    header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      color: #fff;
+      padding: 64px 24px 52px;
+      text-align: center;
+    }
+    header h1 {
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 32px;
+    }
+
+    /* ── tech stack icons ── */
+    .stack-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .stack-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .stack-item img {
+      width: 52px;
+      height: 52px;
+      display: block;
+    }
+    .stack-item .stack-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.6);
+    }
+    .stack-connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 0 20px;
+    }
+    .stack-connector .conn-line {
+      width: 48px;
+      height: 1.5px;
+      background: rgba(255,255,255,0.25);
+      margin-top: 18px;
+    }
+    .stack-connector .conn-label {
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.5px;
+      margin-top: -6px;
+    }
+    header p.byline {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.5px;
+      margin-bottom: 28px;
+    }
+    header p.subtitle {
+      font-size: 1.1rem;
+      color: #a8c5f0;
+      max-width: 660px;
+      margin: 0 auto 28px;
+    }
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+    .badge {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 0.82rem;
+      color: #d4e8ff;
+      letter-spacing: 0.3px;
+    }
+
+    /* ── layout ── */
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    section {
+      margin-top: 56px;
+    }
+
+    h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: #0f3460;
+      border-bottom: 2px solid #e0e7f3;
+      padding-bottom: 8px;
+      margin-bottom: 20px;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin: 28px 0 10px;
+    }
+
+    p { margin-bottom: 14px; }
+    p:last-child { margin-bottom: 0; }
+
+    a { color: #0f3460; }
+    a:hover { color: #e94560; }
+
+    /* ── pipeline diagram ── */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0;
+      margin: 24px 0;
+      justify-content: center;
+    }
+    .pipe-step {
+      background: #fff;
+      border: 1.5px solid #ccd8ed;
+      border-radius: 8px;
+      padding: 10px 16px;
+      text-align: center;
+      min-width: 130px;
+    }
+    .pipe-step .lang {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #7a90b8;
+      margin-bottom: 2px;
+    }
+    .pipe-step .label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+    .pipe-arrow {
+      font-size: 1.2rem;
+      color: #7a90b8;
+      padding: 0 6px;
+      flex-shrink: 0;
+    }
+
+    /* ── callout box ── */
+    .callout {
+      background: #fff8e7;
+      border-left: 4px solid #f0a500;
+      border-radius: 0 6px 6px 0;
+      padding: 14px 18px;
+      margin: 20px 0;
+      font-size: 0.95rem;
+    }
+    .callout.insight {
+      background: #eaf4ff;
+      border-color: #0f3460;
+    }
+    .callout.result {
+      background: #edfaf1;
+      border-color: #1a7a3a;
+    }
+    .callout strong { font-weight: 700; }
+
+    /* ── tables ── */
+    .table-wrap { overflow-x: auto; margin: 18px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th {
+      background: #0f3460;
+      color: #fff;
+      font-weight: 600;
+      padding: 9px 14px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 14px;
+      border-bottom: 1px solid #e4eaf5;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #f4f7fc; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.hl { font-weight: 600; color: #0f3460; }
+    td.warn { color: #b05000; font-weight: 600; }
+    td.good { color: #1a7a3a; font-weight: 600; }
+    td.dim { color: #7a90b8; font-style: italic; }
+
+    /* ── footer ── */
+    footer {
+      text-align: center;
+      font-size: 0.83rem;
+      color: #7a90b8;
+      padding: 32px 24px;
+      border-top: 1px solid #dde4f0;
+    }
+    footer a { color: #7a90b8; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Recursive Model Improvement via<br>Active Learning in Non-Life Pricing</h1>
+
+  <div class="stack-row">
+    <div class="stack-item">
+      <img src="https://cdn.simpleicons.org/python/ffffff" alt="Python">
+      <span class="stack-label">Python</span>
+    </div>
+    <div class="stack-connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">trains</div>
+    </div>
+    <div class="stack-item">
+      <img src="https://cdn.simpleicons.org/lightgbm/ffffff" alt="LightGBM">
+      <span class="stack-label">LightGBM</span>
+    </div>
+    <div class="stack-connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">validated by</div>
+    </div>
+    <div class="stack-item">
+      <img src="https://cdn.simpleicons.org/python/ffffff" alt="SHAP">
+      <span class="stack-label">SHAP</span>
+    </div>
+    <div class="stack-connector">
+      <div class="conn-line"></div>
+      <div class="conn-label">explored via</div>
+    </div>
+    <div class="stack-item">
+      <img src="https://cdn.simpleicons.org/streamlit/ffffff" alt="Streamlit">
+      <span class="stack-label">Streamlit</span>
+    </div>
+  </div>
+
+  <p class="subtitle">A simulation of how an insurer reverse-engineers a competitor's
+    pricing engine by scraping aggregator quotes — and how active learning makes that
+    scraping strategy as efficient as possible.</p>
+  <p class="byline">David Fischer · 2026</p>
+  <div class="badge-row">
+    <span class="badge">Python 3.12 · LightGBM · SHAP</span>
+    <span class="badge">Active Learning</span>
+    <span class="badge">Streamlit Dashboard</span>
+    <span class="badge">Motor Insurance · 105 K policies</span>
+    <span class="badge">Lledó &amp; Pavía (2024)</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── CONCEPT ── -->
+  <section>
+    <h2>The problem</h2>
+    <p>
+      Insurers selling on aggregator platforms like
+      <a href="https://www.comparis.ch" target="_blank" rel="noopener">comparis.ch</a>
+      can observe competitor quotes in real time. By systematically submitting policy
+      profiles and recording the returned premiums, they can train a
+      <strong>competitor model</strong> — a replica of the competitor's pricing engine.
+    </p>
+    <p>
+      In practice, scraping budgets are limited: every profile query costs time and risks
+      detection. The question is not <em>whether</em> to scrape, but <em>which profiles</em>
+      to query next to learn the tariff structure as efficiently as possible.
+      This is an active learning problem.
+    </p>
+
+    <div class="callout insight">
+      <strong>Core research question.</strong> Does an active learning query strategy
+      rediscover systematic ceteris paribus profiling on its own — varying one factor
+      at a time (e.g. driver age 18→70) while holding all others fixed? If so, the
+      strategy has converged on exactly how practitioners scrape in the real world.
+    </div>
+  </section>
+
+  <!-- ── ARCHITECTURE ── -->
+  <section>
+    <h2>Architecture</h2>
+
+    <div class="pipeline">
+      <div class="pipe-step">
+        <div class="lang">Real data</div>
+        <div class="label">Train oracle</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="lang">Oracle + pool</div>
+        <div class="label">Simulate aggregator</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="lang">AL loop</div>
+        <div class="label">Query &amp; retrain</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-step">
+        <div class="lang">Streamlit</div>
+        <div class="label">Compare strategies</div>
+      </div>
+    </div>
+
+    <h3>Phase 1 — Oracle</h3>
+    <p>
+      A LightGBM model is trained on <code>Premium ~ features</code> using all
+      renewal rows from the
+      <a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a>
+      motor insurance dataset (105,555 rows, 53,502 unique policies). This becomes the
+      <strong>oracle</strong>: given any policy profile, it returns a simulated
+      competitor quote.
+    </p>
+    <p>
+      The oracle is a memorisation task, not a predictive model — there is no train/test
+      split. In-sample R² measures how well it has learned the tariff surface.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Feature</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>driver_age</td><td>Age of primary driver at renewal (engineered from date of birth)</td></tr>
+          <tr><td>licence_age</td><td>Years since licence was issued</td></tr>
+          <tr><td>vehicle_age</td><td>Age of vehicle at renewal</td></tr>
+          <tr><td>Power, Cylinder_capacity</td><td>Engine power (hp) and cylinder capacity</td></tr>
+          <tr><td>Value_vehicle</td><td>Market value of the vehicle</td></tr>
+          <tr><td>Seniority</td><td>Customer tenure with the insurer</td></tr>
+          <tr><td>Area, Type_risk, Type_fuel</td><td>Categorical risk factors</td></tr>
+          <tr><td>Distribution_channel, Payment</td><td>Contract administration features</td></tr>
+          <tr><td class="dim">Cost_claims_year, N_claims_year</td><td class="dim">Excluded — current-year outcomes, not observable at quote time</td></tr>
+          <tr><td class="dim">N_claims_history, R_Claims_history</td><td class="dim">Excluded — scraping is done with claim history set to 0 on aggregators</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Phase 2 — Active learning loop</h3>
+    <p>
+      The profile pool is built by taking real policy rows as anchor points and varying
+      continuous features in small steps — mirroring how scraping is done in practice.
+      The oracle labels every profile. The competitor model is then trained on a warm-start
+      budget (~50k profiles) and iteratively refined by an AL query strategy.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>AL strategy</th><th>Query criterion</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Uncertainty sampling</td><td>Profiles where the model's prediction variance is highest</td></tr>
+          <tr><td>Error-based</td><td>Profiles where the residual against the oracle is largest</td></tr>
+          <tr><td>SHAP divergence</td><td>Profiles where the SHAP structure of the competitor model diverges most from the oracle</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Convergence is tracked in two complementary metrics: MSE against the oracle,
+      and SHAP structure similarity — a richer signal that captures whether the
+      competitor model has learned the same tariff <em>factors</em>, not just the
+      same premium levels.
+    </p>
+  </section>
+
+  <!-- ── ORACLE RESULTS ── -->
+  <section>
+    <h2>Oracle — validation results</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th class="num">Value</th>
+            <th>Interpretation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>In-sample RMSE</td>
+            <td class="num good">64.10</td>
+            <td>Mean absolute error ~€64 on premiums averaging ~€316</td>
+          </tr>
+          <tr>
+            <td>In-sample R²</td>
+            <td class="num good">0.793</td>
+            <td>~10% of variance is irreducible within-policy noise</td>
+          </tr>
+          <tr>
+            <td>Theoretical R² ceiling</td>
+            <td class="num">~0.90</td>
+            <td>Same policy repriced across years with unobservable factors</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>SHAP validation — key findings</h3>
+
+    <div class="callout result">
+      <strong>driver_age.</strong> Strong U-shaped effect: SHAP values are highest (+50 to +180)
+      for drivers aged 18–25, decay sharply to negative territory by age 35–40, and
+      recover slightly for older drivers. The elderly uptick is muted — the dataset
+      has few policies above age 70. Actuarially sensible.
+    </div>
+
+    <div class="callout result">
+      <strong>driver_age × Power interaction.</strong> Young drivers (18–25) with
+      high-powered vehicles show amplified SHAP values — the classic high-risk
+      combination. The interaction dissolves by age 35. The oracle has learned this
+      structure from the data without any explicit modelling.
+    </div>
+
+    <div class="callout">
+      <strong>Known limitation.</strong> Claim history (<code>N_claims_history</code>,
+      <code>R_Claims_history</code>) is excluded from the oracle. In practice, scraping
+      is performed with claim history set to 0 on aggregators, so this matches real-world
+      scraping behaviour — but it means bonus-malus effects are not captured.
+    </div>
+
+  </section>
+
+  <!-- ── AL RESULTS (placeholder) ── -->
+  <section>
+    <h2>Active learning results <span style="font-size:0.85rem; font-weight:400; color:#7a90b8;">(in progress)</span></h2>
+    <p>
+      The AL simulation loop is under active development. Results comparing query
+      strategies — convergence curves, SHAP similarity trajectories, and strategy
+      behaviour analysis — will be published here.
+    </p>
+  </section>
+
+  <!-- ── REPO ── -->
+  <section>
+    <h2>Explore the project</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Resource</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="https://github.com/fischerdm/market-model-al" target="_blank" rel="noopener">GitHub repository</a></td>
+            <td>Full source: oracle, AL loop, Streamlit dashboard</td>
+          </tr>
+          <tr>
+            <td><a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a></td>
+            <td>Dataset of an actual motor vehicle insurance portfolio, Mendeley Data V2</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Built with Python · LightGBM · SHAP · Streamlit ·
+  Dataset: <a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a>
+</footer>
+
+</body>
+</html>
