@@ -25,12 +25,13 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    - Raw date columns engineered to ages/durations instead
 
 2. **AL simulation loop (Phase 2)**
-   - Profile pool: the real dataset rows (no generative model needed — 105k rows is sufficient)
-   - Warm start: ~50k labeled profiles drawn from the pool (random sample + ceteris paribus profiles)
+   - **Profile pool — perturbation-based (required, not optional)**: the pool must cover the full feature space, not just the 105k observed rows. A real aggregator like comparis.ch returns a premium for *any* profile — the simulation must do the same. The pool is built by taking real rows as anchor points and varying continuous features in small steps (e.g. `driver_age` 18→70, `Power` across its range) with all other features held fixed. The oracle labels every generated profile. This is also exactly how scraping is done in practice.
+   - Warm start: ~50k labeled profiles drawn from the pool
    - Train the competitor model on the warm-start budget
    - Apply an AL query strategy to select next profiles → label via oracle → retrain → repeat
    - Multiple AL strategies implemented and compared (uncertainty sampling, error-based, SHAP divergence); no prior preference
    - Track convergence in MSE and SHAP structure similarity to the oracle
+   - **Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own? A good strategy should converge on varying one factor at a time across its range — this is the structure of a competitor tariff that scraping is trying to reveal.
 
 ### No copula / generative model
 The copula was dropped. The real dataset (~105k rows) is large enough to serve as the profile pool directly. Drawing from real data is simpler and more principled — those profiles represent the true feature distribution by definition.
