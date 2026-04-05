@@ -2,7 +2,9 @@
 
 ## What this project is
 
-A simulation of the *nanny model* use case in non-life insurance pricing: an insurer scrapes competitor quotes from aggregator websites and trains a model on them. This project builds a controlled synthetic environment to test active learning (AL) query strategies, where the ground truth is known.
+A simulation of the *competitor model* use case in non-life insurance pricing: an insurer scrapes competitor quotes from aggregator websites and trains a model on them. This project builds a controlled synthetic environment to test active learning (AL) query strategies, where the ground truth is known.
+
+The end deliverable is a **Streamlit dashboard** that lets users explore and compare AL query strategies interactively.
 
 ## Architecture decisions
 
@@ -11,22 +13,33 @@ Lledó, Josep; Pavía, Jose M. (2024), *Dataset of an actual motor vehicle insur
 
 Chosen because it contains an actual `Premium` (net premium) column — a direct proxy for a competitor quote. No frequency/severity modelling needed.
 
-### Three-phase pipeline
+### Two-phase pipeline
 
-1. **Learn from real data** — fit a generative model to the joint feature distribution; fit LightGBM on `Premium ~ features` as the **oracle** (the "true" competitor tariff)
-2. **Synthetic world** — sample unlimited profiles from the generative model, label with the oracle; inject controlled drifts (feature marginal shifts, oracle weight perturbations)
-3. **AL simulation loop** — start with a small labeled budget, apply a query strategy, retrain the nanny model, repeat; track convergence in MSE and SHAP structure similarity to the oracle
+The real dataset is treated as the competitor's actual tariff. The oracle learns it. The AL loop tests how efficiently a competitor model can recover it.
 
-### Generative model choice
-Start simple: **Gaussian copula + parametric marginals** (e.g. SDV `GaussianCopulaSynthesizer`). The synthetic world only needs to represent interesting relationships, not perfectly replicate reality.
+1. **Oracle (Phase 1)**
+   - Fit **LightGBM** on `Premium ~ features` on all rows (including all renewal years) → the **oracle** (the competitor's pricing engine)
+   - Validate oracle curves for actuarial plausibility: `driver_age` shape, key interactions — goal is "reasonably good", not perfect; the oracle only needs to be a credible synthetic tariff for testing the AL loop
+   - Excluded features: `Cost_claims_year`, `N_claims_year` — current-year outcomes, not observable at quote time
+   - `N_claims_history` and `R_Claims_history` also excluded — in practice scraping is done with claim history set to 0 (standardised input on aggregators like comparis.ch), so this matches real-world scraping behaviour
+   - Raw date columns engineered to ages/durations instead
 
-Alternatives considered but deferred:
-- **CTGAN / TVAE** — better at complex non-linear dependencies in mixed-type tabular data, but a black box; revisit if the copula fails to capture important structure
+2. **AL simulation loop (Phase 2)**
+   - **Profile pool — perturbation-based (required, not optional)**: the pool must cover the full feature space, not just the 105k observed rows. A real aggregator like comparis.ch returns a premium for *any* profile — the simulation must do the same. The pool is built by taking real rows as anchor points and varying continuous features in small steps (e.g. `driver_age` 18→70, `Power` across its range) with all other features held fixed. The oracle labels every generated profile. This is also exactly how scraping is done in practice.
+   - Warm start: ~50k labeled profiles drawn from the pool
+   - Train the competitor model on the warm-start budget
+   - Apply an AL query strategy to select next profiles → label via oracle → retrain → repeat
+   - Multiple AL strategies implemented and compared (uncertainty sampling, error-based, SHAP divergence); no prior preference
+   - Track convergence in MSE and SHAP structure similarity to the oracle
+   - **Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own? A good strategy should converge on varying one factor at a time across its range — this is the structure of a competitor tariff that scraping is trying to reveal.
+
+### No copula / generative model
+The copula was dropped. The real dataset (~105k rows) is large enough to serve as the profile pool directly. Drawing from real data is simpler and more principled — those profiles represent the true feature distribution by definition.
 
 ### SHAP
 Used in two places:
-- On the **oracle** — validate the learned tariff structure looks actuarially sensible
-- On the **nanny model** — track recovery of the oracle's SHAP structure across AL iterations (a richer convergence metric than MSE alone)
+- On the **oracle** — validate the learned tariff structure looks actuarially sensible (driver age curve, vehicle age, power, interactions)
+- On the **competitor model** — track recovery of the oracle's SHAP structure across AL iterations (a richer convergence metric than MSE alone)
 
 ## Stack
-Python 3.12, LightGBM, SHAP, SDV (copula synthesis). All notebooks are `.py` files (numbered), not `.ipynb`.
+Python 3.12, LightGBM, SHAP, Streamlit. All notebooks are `.py` files (numbered), not `.ipynb`.

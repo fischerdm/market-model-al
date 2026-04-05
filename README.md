@@ -1,48 +1,47 @@
 # Recursive Model Improvement via Active Learning in Non-Life Pricing
 
-Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *nanny model*.
+Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *competitor model*.
 
 ## Concept
 
 An insurer can train a competitor model by scraping quoted premiums from aggregator platforms. This project simulates that iterative process in a controlled synthetic environment where the ground truth is known.
 
-The simulation runs in three phases:
+The real dataset is treated as the competitor's actual tariff. A LightGBM oracle learns that tariff and can return a premium for any policy profile — simulating the function of an aggregator like comparis.ch. The AL loop then tests how efficiently a competitor model can recover the oracle from a limited scraping budget.
 
-### Phase 1 — Learn from real data
+The end deliverable is a **Streamlit dashboard** for interactively exploring and comparing AL query strategies.
 
-- Fit a **Gaussian copula** to the joint feature distribution of real motor policies
-- Fit a **LightGBM regression** on `Premium ~ features` → this becomes the **oracle** (the "true" competitor tariff)
+### Phase 1 — Oracle: learn the competitor's pricing engine
+
+- Fit a **LightGBM oracle** on `Premium ~ features` across all renewal years → the competitor's pricing engine
 - Dataset: Lledó, Josep; Pavía, Jose M. (2024), *Dataset of an actual motor vehicle insurance portfolio*, Mendeley Data V2, [doi: 10.17632/5cxyb5fp4f.2](https://doi.org/10.17632/5cxyb5fp4f.2)
-- The oracle's structure is analysed with **SHAP** to validate it looks actuarially sensible
+- Validate oracle structure with **SHAP dependence plots** (driver age curve, vehicle power, key interactions — actuarial sanity check)
 
-### Phase 2 — Synthetic world
+### Phase 2 — Active learning loop
 
-- Sample unlimited policy profiles from the copula
-- Label them using the oracle (± noise)
-- Controlled drifts can be injected: shift feature marginals, perturb oracle weights
-- Known ground truth enables objective measurement of AL performance
+The profile pool is built by taking real rows as anchor points and varying continuous features in small steps (e.g. `driver_age` 18→70, keeping all other features fixed) — mirroring how scraping is done in practice on aggregators. The oracle labels every generated profile.
 
-### Phase 3 — Active learning loop
-
-1. Start with a small labeled budget (sampled oracle quotes)
-2. Train the nanny model on observed profiles
-3. Apply an AL query strategy to select the next profiles to query
-4. Re-label via the oracle and retrain
+1. Warm start: ~50k labeled profiles from the pool
+2. Train the competitor model on the warm-start budget
+3. Apply an AL query strategy to identify the next profiles to query
+4. Label via the oracle and retrain
 5. Repeat — tracking convergence in MSE and SHAP structure similarity to the oracle
+6. Multiple AL strategies compared: uncertainty sampling, error-based, SHAP divergence
+
+**Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own?
 
 ## Project structure
 
 ```
-nanny-model/
+market-model-al/
 ├── data/
-│   ├── raw/          # Lledó & Pavía (2024) data (not committed)
-│   └── processed/    # engineered datasets and synthetic samples
-├── notebooks/        # analysis scripts (numbered)
+│   ├── raw/              # Lledó & Pavía (2024) data (not committed)
+│   └── processed/        # engineered datasets and synthetic samples
+├── notebooks/            # analysis scripts (numbered .py files)
 ├── src/
-│   └── nanny_model/  # reusable Python package
+│   └── market_model_al/  # reusable Python package
 ├── outputs/
-│   ├── figures/      # saved plots
-│   └── models/       # saved model artefacts
+│   ├── figures/          # saved plots (not committed)
+│   └── models/           # saved model artefacts (not committed)
 └── pyproject.toml
 ```
 
