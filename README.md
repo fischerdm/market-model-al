@@ -18,12 +18,12 @@ The end deliverable is a **Streamlit dashboard** for interactively exploring and
 
 ### Phase 2 — Active learning loop
 
-The profile pool is built by taking real rows as anchor points and varying continuous features in small steps (e.g. `driver_age` 18→70, keeping all other features fixed) — mirroring how scraping is done in practice on aggregators. The oracle labels every generated profile.
+Candidate profiles are generated lazily on demand via a ceteris-paribus approach: real rows serve as anchor points and continuous features are swept one at a time across their range (e.g. `driver_age` 18→80, all other features held fixed). This mirrors how scraping is done in practice. The oracle prices any profile on demand — there is no pre-built pool on disk.
 
-1. Warm start: ~50k labeled profiles from the pool
+1. Warm start: ~50k labeled profiles drawn from the ceteris-paribus generator
 2. Train the competitor model on the warm-start budget
 3. Apply an AL query strategy to identify the next profiles to query
-4. Label via the oracle and retrain
+4. Label via the oracle engine and retrain
 5. Repeat — tracking convergence in MSE and SHAP structure similarity to the oracle
 6. Multiple AL strategies compared: uncertainty sampling, error-based, SHAP divergence
 
@@ -35,10 +35,17 @@ The profile pool is built by taking real rows as anchor points and varying conti
 market-model-al/
 ├── data/
 │   ├── raw/              # Lledó & Pavía (2024) data (not committed)
-│   └── processed/        # engineered datasets and synthetic samples
+│   └── processed/        # intermediate processed data (not committed)
+├── docs/                 # GitHub Pages
 ├── notebooks/            # analysis scripts (numbered .py files)
+│   ├── 01_oracle.py                 # fit and validate the oracle
+│   └── 02_oracle_engine_smoke.py   # smoke test for the pricing engine
 ├── src/
-│   └── market_model_al/  # reusable Python package
+│   └── market_model_al/
+│       ├── features.py          # feature engineering
+│       ├── constraints.py       # physical validity rules for profiles
+│       ├── oracle_engine.py     # OraclePricingEngine: query(profiles) → prices
+│       └── profile_generator.py # ceteris-paribus candidate generation
 ├── outputs/
 │   ├── figures/          # saved plots (not committed)
 │   └── models/           # saved model artefacts (not committed)
