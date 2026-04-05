@@ -119,6 +119,7 @@ for feature in DEPENDENCE_FEATURES:
         feature,
         shap_values,
         X_sample,
+        interaction_index=None,
         ax=ax,
         show=False,
     )
