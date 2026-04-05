@@ -8,8 +8,10 @@ simulated competitor quote.
 Validates the learned tariff structure with SHAP (actuarial sanity check).
 
 Outputs:
-  outputs/models/oracle.pkl            — saved LightGBM model
-  outputs/figures/oracle_shap_*.png    — SHAP summary and importance plots
+  outputs/models/oracle.pkl                   — saved LightGBM model
+  outputs/figures/oracle_shap_summary.png     — SHAP beeswarm
+  outputs/figures/oracle_shap_importance.png  — SHAP importance bar
+  outputs/figures/oracle_shap_dep_*.png       — SHAP dependence plots (key features)
 """
 
 import joblib
@@ -92,5 +94,39 @@ plt.tight_layout()
 plt.savefig(FIGURES / "oracle_shap_importance.png", dpi=150, bbox_inches="tight")
 plt.close()
 print("SHAP importance bar saved.")
+
+# ── 4. SHAP dependence plots — key actuarial factors ──────────────────────────
+# Each plot shows the marginal effect of one feature on the premium prediction.
+# The colour axis shows the most important interacting feature (auto-selected by
+# SHAP). These are the curves we validate for actuarial plausibility.
+
+DEPENDENCE_FEATURES = [
+    "driver_age",       # expect U-shape: young and elderly drivers costlier
+    "licence_age",      # expect decreasing: more experience → lower risk
+    "vehicle_age",      # expect non-linear: older cars may be cheaper to insure
+    "Power",            # expect increasing: more powerful → higher premium
+    "Cylinder_capacity",
+    "Value_vehicle",    # expect increasing: more valuable → higher premium
+    "Seniority",        # loyalty effect: longer customer → potential discount
+]
+
+for feature in DEPENDENCE_FEATURES:
+    if feature not in X_sample.columns:
+        print(f"  Skipping {feature} (not in features)")
+        continue
+    fig, ax = plt.subplots(figsize=(7, 4))
+    shap.dependence_plot(
+        feature,
+        shap_values,
+        X_sample,
+        ax=ax,
+        show=False,
+    )
+    ax.set_title(f"SHAP dependence — {feature}")
+    ax.axhline(0, color="grey", linewidth=0.8, linestyle="--")
+    plt.tight_layout()
+    plt.savefig(FIGURES / f"oracle_shap_dep_{feature}.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Dependence plot saved: {feature}")
 
 print("\nDone.")
