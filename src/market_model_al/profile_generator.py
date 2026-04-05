@@ -13,12 +13,14 @@ Usage
     engine  = OraclePricingEngine("outputs/models/oracle.pkl")
     anchors = df[FEATURES].sample(100, random_state=42)
 
-    profiles = generate_ceteris_paribus(anchors, validator=engine.validate)
+    profiles = generate_ceteris_paribus(anchors)   # invalid rows dropped automatically
     prices   = engine.query(profiles)
 """
 
 import numpy as np
 import pandas as pd
+
+from market_model_al.constraints import validate as _validate
 
 # Continuous features eligible for sweeping.
 CONTINUOUS_FEATURES = [
@@ -48,7 +50,7 @@ DEFAULT_RANGES: dict[str, np.ndarray] = {
 def generate_ceteris_paribus(
     anchors: pd.DataFrame,
     feature_ranges: dict[str, np.ndarray] | None = None,
-    validator: object = None,
+    validate: bool = True,
 ) -> pd.DataFrame:
     """Generate ceteris-paribus profiles from anchor rows.
 
@@ -64,10 +66,9 @@ def generate_ceteris_paribus(
     feature_ranges : dict, optional
         Override the default sweep grid for any subset of features.
         Keys are feature names; values are 1-D arrays of values to try.
-    validator : callable, optional
-        A function ``validator(profiles) -> pd.Series[bool]``.  When provided,
-        rows that fail validation are dropped before returning.
-        Pass ``engine.validate`` from OraclePricingEngine.
+    validate : bool, default True
+        Whether to drop physically invalid profiles (e.g. licence_age >
+        driver_age - 16) before returning.
 
     Returns
     -------
@@ -96,8 +97,8 @@ def generate_ceteris_paribus(
     for col in anchors.select_dtypes("category").columns:
         profiles[col] = profiles[col].astype("category")
 
-    if validator is not None:
-        mask = validator(profiles)
+    if validate:
+        mask = _validate(profiles)
         profiles = profiles[mask].reset_index(drop=True)
 
     return profiles

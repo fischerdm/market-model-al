@@ -18,23 +18,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from market_model_al.constraints import validate as _validate
 from market_model_al.features import CAT_FEATURES, CAT_FEATURES_OBJ
-
-
-# Physical lower bounds for continuous features.
-# Upper bounds are not enforced — they are data-range artefacts, not laws.
-_LOWER_BOUNDS: dict[str, float] = {
-    "driver_age":        18.0,   # minimum legal driving age
-    "licence_age":        0.0,   # can't have held a licence for negative time
-    "vehicle_age":        0.0,   # car can't be newer than registration year
-    "Power":              1.0,
-    "Cylinder_capacity":  1.0,
-    "Value_vehicle":      1.0,
-    "Seniority":          0.0,
-}
-
-# Minimum age at which a driving licence can be obtained (used in cross-check).
-_MIN_LICENCE_AGE = 16.0
 
 
 class OraclePricingEngine:
@@ -53,25 +38,8 @@ class OraclePricingEngine:
 
     def validate(self, profiles: pd.DataFrame) -> pd.Series:
         """Return a boolean Series (index-aligned) — True where the profile
-        is physically valid.
-
-        Checks applied:
-        - Each bounded continuous feature is >= its lower bound.
-        - ``licence_age <= driver_age - _MIN_LICENCE_AGE`` (can't have obtained
-          a licence before the minimum licence age).
-        """
-        mask = pd.Series(True, index=profiles.index)
-
-        for col, lb in _LOWER_BOUNDS.items():
-            if col in profiles.columns:
-                mask &= profiles[col] >= lb
-
-        if "driver_age" in profiles.columns and "licence_age" in profiles.columns:
-            mask &= profiles["licence_age"] <= (
-                profiles["driver_age"] - _MIN_LICENCE_AGE
-            )
-
-        return mask
+        is physically valid. Delegates to ``constraints.validate``."""
+        return _validate(profiles)
 
     def query(self, profiles: pd.DataFrame) -> np.ndarray:
         """Return oracle-predicted premiums for *valid* profiles.
