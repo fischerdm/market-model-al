@@ -89,9 +89,18 @@ class ALSimulation:
         competitor_params: dict | None = None,
     ) -> None:
         self._oracle = oracle_engine
-        self._real_X = real_X.reset_index(drop=True)
         self._master_rng = np.random.default_rng(seed)
         self._competitor_params = competitor_params
+
+        # Drop the small number of real rows with data-quality violations so the
+        # holdout and anchor pool never contain physically invalid profiles.
+        real_X = real_X.reset_index(drop=True)
+        valid_mask = oracle_engine.validate(real_X)
+        n_invalid = (~valid_mask).sum()
+        if n_invalid > 0:
+            print(f"  Dropped {n_invalid} invalid rows from real_X "
+                  f"({n_invalid / len(real_X):.2%} of dataset).")
+        self._real_X = real_X[valid_mask].reset_index(drop=True)
 
         # Carve a fixed holdout from real_X — never used as anchors or warm start.
         holdout_idx = self._master_rng.choice(
