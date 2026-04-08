@@ -23,23 +23,41 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    - Excluded features: `Cost_claims_year`, `N_claims_year` — current-year outcomes, not observable at quote time
    - `N_claims_history` and `R_Claims_history` also excluded — in practice scraping is done with claim history set to 0 (standardised input on aggregators like comparis.ch), so this matches real-world scraping behaviour
    - Raw date columns engineered to ages/durations instead
+   - `licence_age` = years since obtaining the licence (driving experience), NOT age at licensing; the physical constraint is `licence_age <= driver_age - MIN_AGE_AT_LICENSING` where `MIN_AGE_AT_LICENSING = 18` (Spain)
 
 2. **AL simulation loop (Phase 2)**
-   - **Profile pool — perturbation-based (required, not optional)**: the pool must cover the full feature space, not just the 105k observed rows. A real aggregator like comparis.ch returns a premium for *any* profile — the simulation must do the same. The pool is built by taking real rows as anchor points and varying continuous features in small steps (e.g. `driver_age` 18→70, `Power` across its range) with all other features held fixed. The oracle labels every generated profile. This is also exactly how scraping is done in practice.
-   - Warm start: ~50k labeled profiles drawn from the pool
-   - Train the competitor model on the warm-start budget
-   - Apply an AL query strategy to select next profiles → label via oracle → retrain → repeat
-   - Multiple AL strategies implemented and compared (uncertainty sampling, error-based, SHAP divergence); no prior preference
-   - Track convergence in MSE and SHAP structure similarity to the oracle
-   - **Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own? A good strategy should converge on varying one factor at a time across its range — this is the structure of a competitor tariff that scraping is trying to reveal.
+
+   **Warm start** seeds the competitor model with two components:
+   - **(A) Real rows** — a random sample from the Spanish dataset, simulating organic quote requests arriving via comparis (e.g. 10k rows ≈ 10% of the dataset)
+   - **(B) CP profiles** — structured ceteris-paribus sweeps from a small set of anchors, simulating an initial systematic scrape (e.g. 50 anchors ≈ 12k profiles)
+   - The warm-start mix ratio is a configurable experiment parameter; `04_build_warm_start.py` builds and saves it
+
+   **Weekly AL loop** (time-indexed by `profiles_per_week`):
+   - Each week: sample `n_anchors_per_week` anchor rows from the real dataset → generate ceteris-paribus candidate profiles ad hoc → apply query strategy to select `profiles_per_week` candidates → label selected profiles via the oracle → retrain competitor model
+   - No pre-built pool on disk — profiles are generated lazily on demand
+   - Track convergence: RMSE on a fixed holdout + mean SHAP cosine similarity to the oracle
+
+   **AL query strategies** (all implemented, no prior preference):
+   - `random` — uniform random baseline
+   - `uncertainty` — bootstrap variance across lightweight ensemble members
+   - `error_based` — expected absolute error predicted by a proxy model trained on labeled residuals
+   - `shap_divergence` — profiles where oracle and competitor SHAP vectors diverge most (L2 distance)
+
+   **Tariff change simulation** (`PerturbedOracleEngine` in `perturbed_oracle.py`):
+   - A perturbed oracle applies a systematic premium shift (e.g. young-driver surcharge +20%, uniform reprice, area repricing)
+   - Injected mid-run at `tariff_change_week`; holdout labels switch to the new oracle so RMSE measures recovery of the new tariff
+   - Lets practitioners compare *continuous scraping* vs *restart after tariff change* strategies
+   - Continuous scraping is NOT always optimal — a major re-tariffing may require a restart + bulk scrape to converge faster than incrementally overriding stale labeled data
+
+   **Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own? A good strategy should converge on varying one factor at a time across its range — this is the structure of a competitor tariff that scraping is trying to reveal.
 
 ### No copula / generative model
-The copula was dropped. The real dataset (~105k rows) is large enough to serve as the profile pool directly. Drawing from real data is simpler and more principled — those profiles represent the true feature distribution by definition.
+The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly. Drawing from real data is simpler and more principled — those profiles represent the true feature distribution by definition.
 
 ### SHAP
 Used in two places:
 - On the **oracle** — validate the learned tariff structure looks actuarially sensible (driver age curve, vehicle age, power, interactions)
-- On the **competitor model** — track recovery of the oracle's SHAP structure across AL iterations (a richer convergence metric than MSE alone)
+- On the **competitor model** — track recovery of the oracle's SHAP structure across AL weeks (a richer convergence metric than MSE alone); measured as mean cosine similarity on a fixed holdout set
 
 ## Stack
-Python 3.12, LightGBM, SHAP, Streamlit. All notebooks are `.py` files (numbered), not `.ipynb`.
+Python 3.12, LightGBM, SHAP, Streamlit. All notebooks are `.py` files (numbered), not `.ipynb`. Virtual environment is `.venv` (not conda).
