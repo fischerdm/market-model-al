@@ -62,7 +62,7 @@ violations = {
     "Cylinder_capacity < 1":   make_invalid("Cylinder_capacity", 0),
     "Value_vehicle < 1":       make_invalid("Value_vehicle", 0.0),
     "Seniority < 0":           make_invalid("Seniority", -1),
-    "licence_age > driver_age - 16":
+    "licence_age > driver_age - 18":
         make_invalid("licence_age", baseline["driver_age"].iloc[0] - 10.0),
 }
 

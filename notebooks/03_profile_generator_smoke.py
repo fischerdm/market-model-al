@@ -85,7 +85,7 @@ print("Test 2 PASSED — ceteris-paribus property holds (only swept feature vari
 
 # ── Test 3: validate=True drops invalid rows ───────────────────────────────────
 # Sweeping licence_age across 0–50 for a young anchor (driver_age ~25) will
-# produce rows where licence_age > driver_age - 16, which must be filtered.
+# produce rows where licence_age > driver_age - 18, which must be filtered.
 
 young_anchor = df[FEATURES][df["driver_age"] < 30].iloc[[0]]
 profiles_validated   = generate_ceteris_paribus(young_anchor, validate=True)

@@ -68,7 +68,7 @@ def generate_ceteris_paribus(
         Keys are feature names; values are 1-D arrays of values to try.
     validate : bool, default True
         Whether to drop physically invalid profiles (e.g. licence_age >
-        driver_age - 16) before returning.
+        driver_age - 18) before returning.
 
     Returns
     -------
