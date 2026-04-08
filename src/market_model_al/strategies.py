@@ -25,17 +25,17 @@ import shap
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _drop_categoricals(X: pd.DataFrame) -> pd.DataFrame:
-    """Convert category columns to their string codes.
+def _encode_categoricals(X: pd.DataFrame) -> pd.DataFrame:
+    """Convert category columns to integer codes.
 
     The quick bootstrap and proxy models only need variance / error estimates —
-    they don't require LightGBM's categorical optimisation.  Converting to
-    strings avoids category-level mismatches between training and prediction
-    data when candidate profiles cover a subset of category values.
+    they don't require LightGBM's categorical optimisation.  Using integer codes
+    avoids category-level mismatches between training and prediction data when
+    candidate profiles cover only a subset of category values.
     """
     result = X.copy()
     for col in X.select_dtypes("category").columns:
-        result[col] = result[col].astype(str)
+        result[col] = result[col].cat.codes  # -1 for unseen values
     return result
 
 
@@ -56,7 +56,7 @@ def _train_quick_lgb(
         n_jobs=-1,
         verbose=-1,
     )
-    model.fit(_drop_categoricals(X), y)
+    model.fit(_encode_categoricals(X), y)
     return model
 
 
@@ -102,7 +102,7 @@ def uncertainty_query(
         boot_model = _train_quick_lgb(
             labeled_X.iloc[boot_idx], labeled_y[boot_idx], rng
         )
-        preds[i] = boot_model.predict(_drop_categoricals(candidate_X))
+        preds[i] = boot_model.predict(_encode_categoricals(candidate_X))
 
     scores = preds.std(axis=0)
     top_k = np.argsort(-scores)[: n]          # best candidates in subsample
@@ -132,7 +132,7 @@ def error_based_query(
         sample_idx = np.arange(len(unlabeled_X))
 
     candidate_X = unlabeled_X.iloc[sample_idx]
-    scores = proxy.predict(_drop_categoricals(candidate_X))
+    scores = proxy.predict(_encode_categoricals(candidate_X))
     top_k = np.argsort(-scores)[:n]
     return sample_idx[top_k]
 
