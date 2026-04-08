@@ -48,8 +48,8 @@ for d in [RESULTS_DIR, FIGURES_DIR]:
 
 PROFILES_PER_WEEK  = 100
 N_ANCHORS_PER_WEEK = 8     # 8 anchors × ~254 steps ≈ 2 000 candidates/week
-N_WEEKS            = 52
-TARIFF_CHANGE_WEEK = 26
+N_WEEKS            = 5
+TARIFF_CHANGE_WEEK = 3
 SEED               = 42
 
 PALETTE = {
