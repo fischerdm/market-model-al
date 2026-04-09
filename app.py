@@ -176,7 +176,7 @@ if not selected_strategies:
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 
-tab1, tab2 = st.tabs(["Strategy comparison", "Tariff change recovery"])
+tab1, tab2, tab3 = st.tabs(["Strategy comparison", "Tariff change recovery", "Segment breakdown"])
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tab 1: Strategy comparison (no tariff change)
@@ -299,5 +299,59 @@ with tab2:
     if not pivot.empty:
         st.dataframe(
             pivot.style.format("{:.2f}"),
+            use_container_width=True,
+        )
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tab 3: Segment breakdown
+# ──────────────────────────────────────────────────────────────────────────────
+
+with tab3:
+    # Import segment metadata for labels/descriptions
+    import sys
+    from pathlib import Path as _Path
+    sys.path.insert(0, str(_Path(__file__).parent / "src"))
+    from market_model_al.segments import SEGMENTS
+
+    seg_cols = [f"rmse_{seg.key}" for seg in SEGMENTS]
+    has_segments = all(c in df_all.columns for c in seg_cols)
+
+    if not has_segments:
+        st.info(
+            "Segment metrics not found in the results file. "
+            "Re-run `notebooks/05_al_simulation.py` to generate them."
+        )
+    else:
+        df_s1_seg = df_all[
+            (df_all["scenario"] == "no_tariff_change")
+            & df_all["strategy"].isin(selected_strategies)
+        ]
+
+        st.header("Per-segment RMSE — no tariff change")
+        st.caption(
+            "Each panel shows RMSE on the holdout subset for a specific driver/vehicle segment. "
+            "A strategy that excels globally but fails in a segment — or vice versa — is visible here."
+        )
+
+        # One row of charts per segment
+        for seg in SEGMENTS:
+            col = f"rmse_{seg.key}"
+            st.subheader(f"{seg.label}  —  {seg.description}")
+            fig = convergence_figure(
+                df_s1_seg, col, "RMSE (€)", selected_strategies
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Final-week segment summary table
+        st.subheader(f"Final-week segment RMSE (week {n_weeks})")
+        max_week = df_s1_seg["week"].max()
+        final_seg = (
+            df_s1_seg[df_s1_seg["week"] == max_week]
+            .set_index("strategy_label")[seg_cols]
+        )
+        final_seg.columns = [seg.label for seg in SEGMENTS]
+        final_seg.index.name = "Strategy"
+        st.dataframe(
+            final_seg.style.format("{:.2f}").highlight_min(axis=0, color="#d4edda"),
             use_container_width=True,
         )
