@@ -46,6 +46,11 @@ DEFAULT_RANGES: dict[str, np.ndarray] = {
     "Seniority":         np.arange(0, 41, 1),                # 41 values
 }
 
+# Pre-validation upper bound on profiles generated per anchor row.
+# Actual count is lower due to the licence_age <= driver_age - 18 constraint.
+# Use this to convert a weekly scraping budget (profiles) to an anchor count.
+PROFILES_PER_ANCHOR: int = sum(len(v) for v in DEFAULT_RANGES.values())  # 254
+
 
 def generate_ceteris_paribus(
     anchors: pd.DataFrame,

@@ -153,9 +153,18 @@ with st.sidebar:
     st.subheader("About")
     n_weeks = df_all["week"].max()
     n_rows  = df_all[df_all["scenario"] == "no_tariff_change"]["n_labeled"].max()
+    weekly_added = (
+        df_all[df_all["scenario"] == "no_tariff_change"]
+        .sort_values(["strategy", "week"])
+        .groupby("strategy")["n_labeled"]
+        .diff()
+        .dropna()
+        .median()
+    )
     st.markdown(
         f"**Simulation:** {n_weeks} weeks  \n"
         f"**Max labeled:** {n_rows:,} profiles  \n"
+        f"**~profiles/week:** {int(weekly_added):,}  \n"
         f"**Scenarios:** {', '.join(df_all['scenario'].unique())}"
     )
 
@@ -179,8 +188,9 @@ with tab1:
 
     st.header("Strategy comparison — no tariff change")
     st.caption(
-        "All strategies start from the same warm-start labeled set. "
-        "Lower RMSE and higher SHAP similarity = faster convergence to the oracle tariff."
+        "Each week the strategy selects which anchor rows to scrape. "
+        "All ceteris-paribus profiles from the selected anchors are generated and labeled. "
+        "Lower RMSE and higher SHAP similarity = the competitor model recovers the oracle tariff faster."
     )
 
     col1, col2 = st.columns(2)

@@ -46,9 +46,9 @@ FIGURES_DIR = ROOT / "outputs" / "figures"
 for d in [RESULTS_DIR, FIGURES_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
-PROFILES_PER_WEEK  = 100
-N_ANCHORS_PER_WEEK = 8     # 8 anchors × ~254 steps ≈ 2 000 candidates/week
-N_WEEKS            = 5
+WEEKLY_BUDGET      = 5_000   # profiles to scrape per week
+CANDIDATE_MULT     = 10      # candidate anchors scored = n_anchors × this
+N_WEEKS            = 10
 TARIFF_CHANGE_WEEK = 3
 SEED               = 42
 
@@ -98,14 +98,14 @@ for strategy in STRATEGIES:
         strategy=strategy,
         warm_start_X=warm_start_X,
         warm_start_y=warm_start_y,
-        profiles_per_week=PROFILES_PER_WEEK,
-        n_anchors_per_week=N_ANCHORS_PER_WEEK,
+        weekly_budget=WEEKLY_BUDGET,
+        candidate_multiplier=CANDIDATE_MULT,
         n_weeks=N_WEEKS,
     )
     df_run["scenario"] = "no_tariff_change"
     results_s1.append(df_run)
 
-# ── Scenario 2: tariff change at week 26 (all strategies, no restart) ─────────
+# ── Scenario 2: tariff change (all strategies, no restart) ────────────────────
 
 print("\n" + "=" * 60)
 print(f"SCENARIO 2 -- Tariff change at week {TARIFF_CHANGE_WEEK} (young-driver +20 %)")
@@ -118,8 +118,8 @@ for strategy in STRATEGIES:
         strategy=strategy,
         warm_start_X=warm_start_X,
         warm_start_y=warm_start_y,
-        profiles_per_week=PROFILES_PER_WEEK,
-        n_anchors_per_week=N_ANCHORS_PER_WEEK,
+        weekly_budget=WEEKLY_BUDGET,
+        candidate_multiplier=CANDIDATE_MULT,
         n_weeks=N_WEEKS,
         tariff_change_week=TARIFF_CHANGE_WEEK,
         perturbed_oracle=perturbed,
@@ -143,12 +143,12 @@ fig.suptitle("Strategy comparison -- no tariff change", fontsize=13)
 
 for strategy, grp in s1.groupby("strategy"):
     c = PALETTE.get(strategy)
-    axes[0].plot(grp["week"], grp["rmse"],                   label=strategy, color=c, lw=2)
-    axes[1].plot(grp["week"], grp["shap_cosine_similarity"],  label=strategy, color=c, lw=2)
+    axes[0].plot(grp["week"], grp["rmse"],                  label=strategy, color=c, lw=2)
+    axes[1].plot(grp["week"], grp["shap_cosine_similarity"], label=strategy, color=c, lw=2)
 
 for ax, ylabel, title in [
-    (axes[0], "RMSE on holdout",        "Premium prediction error"),
-    (axes[1], "Mean cosine similarity",  "SHAP structure recovery"),
+    (axes[0], "RMSE on holdout",       "Premium prediction error"),
+    (axes[1], "Mean cosine similarity", "SHAP structure recovery"),
 ]:
     ax.set_xlabel("Week")
     ax.set_ylabel(ylabel)
