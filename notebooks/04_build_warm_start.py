@@ -46,7 +46,7 @@ from market_model_al.profile_generator import generate_ceteris_paribus
 
 CONFIG = dict(
     real_rows_n   = 10_000,   # (A) real policy rows  (~10 % of the dataset)
-    cp_anchors_n  = 50,       # (B) CP anchors  →  50 × ~254 steps ≈ 12 k profiles
+    cp_anchors_n  = 0,       # (B) CP anchors  →  50 × ~254 steps ≈ 12 k profiles
     seed          = 42,
 )
 
@@ -84,13 +84,17 @@ print(f"    Oracle labels: mean={real_y.mean():.2f}  range=[{real_y.min():.2f}, 
 
 # ── Component B: ceteris-paribus profiles ──────────────────────────────────────
 
-print(f"(B) Generating CP profiles from {CONFIG['cp_anchors_n']} anchors…")
-anchors = df[FEATURES].sample(n=CONFIG["cp_anchors_n"], random_state=CONFIG["seed"] + 1)
-cp_profiles = generate_ceteris_paribus(anchors, validate=True)
-print(f"    {len(cp_profiles):,} valid CP profiles generated")
-
-cp_y = engine.query(cp_profiles)
-print(f"    Oracle labels: mean={cp_y.mean():.2f}  range=[{cp_y.min():.2f}, {cp_y.max():.2f}]\n")
+if CONFIG["cp_anchors_n"] > 0:
+    print(f"(B) Generating CP profiles from {CONFIG['cp_anchors_n']} anchors…")
+    anchors = df[FEATURES].sample(n=CONFIG["cp_anchors_n"], random_state=CONFIG["seed"] + 1)
+    cp_profiles = generate_ceteris_paribus(anchors, validate=True)
+    print(f"    {len(cp_profiles):,} valid CP profiles generated")
+    cp_y = engine.query(cp_profiles)
+    print(f"    Oracle labels: mean={cp_y.mean():.2f}  range=[{cp_y.min():.2f}, {cp_y.max():.2f}]\n")
+else:
+    print("(B) cp_anchors_n = 0 — skipping CP profiles (real rows only warm start)\n")
+    cp_profiles = pd.DataFrame(columns=real_sample.columns)
+    cp_y        = np.array([], dtype=float)
 
 # ── Combine ────────────────────────────────────────────────────────────────────
 
