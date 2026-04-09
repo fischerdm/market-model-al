@@ -51,6 +51,17 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
 
    **Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own? A good strategy should converge on varying one factor at a time across its range — this is the structure of a competitor tariff that scraping is trying to reveal.
 
+   **Strategy redesign (implemented)**: strategies now select *anchor rows*, not individual profiles. The weekly budget determines how many anchors are selected (`n_anchors = weekly_budget // PROFILES_PER_ANCHOR`). All CP profiles from selected anchors are generated and labeled. A candidate pool of `candidate_multiplier × n_anchors` anchors is scored each week; the best are kept.
+
+   **Simulation findings (10-week run, 5 000 profiles/week)**:
+   - Random anchor sampling beats all three informativeness-based strategies on a population-representative holdout
+   - `error_based` recovers the young-driver segment (age < 30) faster than random — the one segment where a sophisticated strategy wins
+   - `shap_divergence` concentrates on edge cases (young drivers, expensive cars, high power), creating a distribution mismatch with the holdout; SHAP cosine similarity bottoms out around week 8
+   - Root cause: greedy informativeness strategies are not representative — they starve mainstream segments of scraping budget
+   - Next step: `segment_adaptive` strategy — allocate weekly budget proportionally to per-segment RMSE, then score anchors within each segment
+
+   **Open question on warm start CP profiles**: the warm start mixes random real rows (A) and CP profiles (B). CP profiles help bootstrap marginal effects quickly but may not add much over random rows when the warm start is large (~20k profiles) — the model is already reasonably informed. CP profiles also create a distribution mismatch relative to the true joint feature distribution. Whether removing them from the warm start materially changes AL strategy performance is an open empirical question.
+
 ### No copula / generative model
 The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly. Drawing from real data is simpler and more principled — those profiles represent the true feature distribution by definition.
 
