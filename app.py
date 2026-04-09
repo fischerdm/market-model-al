@@ -203,7 +203,20 @@ with tab1:
         st.plotly_chart(fig_rmse, use_container_width=True)
 
     with col2:
-        st.subheader("SHAP cosine similarity")
+        st.subheader(
+            "SHAP cosine similarity",
+            help=(
+                "Measures how well the competitor model has recovered the global tariff structure "
+                "of the oracle — not just accuracy in specific regions, but whether each feature "
+                "pushes prices in the right direction and with the right relative magnitude. "
+                "A score of 1 means perfect structural alignment.\n\n"
+                "⚠️ SHAP divergence greedily targets anchors where oracle and competitor "
+                "disagree most. This concentrates scraping on edge cases (young drivers, "
+                "high-power cars) and starves mainstream segments of labels — the model learns "
+                "those regions well but loses global structural alignment, causing SHAP similarity "
+                "to drop over time."
+            ),
+        )
         fig_shap = convergence_figure(
             df_s1, "shap_cosine_similarity", "Cosine similarity", selected_strategies
         )
@@ -260,7 +273,20 @@ with tab2:
         st.plotly_chart(fig_tc_rmse, use_container_width=True)
 
     with col2:
-        st.subheader("SHAP similarity recovery")
+        st.subheader(
+            "SHAP similarity recovery",
+            help=(
+                "Measures how well the competitor model has recovered the global tariff structure "
+                "of the oracle — not just accuracy in specific regions, but whether each feature "
+                "pushes prices in the right direction and with the right relative magnitude. "
+                "A score of 1 means perfect structural alignment.\n\n"
+                "⚠️ SHAP divergence greedily targets anchors where oracle and competitor "
+                "disagree most. This concentrates scraping on edge cases (young drivers, "
+                "high-power cars) and starves mainstream segments of labels — the model learns "
+                "those regions well but loses global structural alignment, causing SHAP similarity "
+                "to drop over time."
+            ),
+        )
         fig_tc_shap = convergence_figure(
             df_s2, "shap_cosine_similarity", "Cosine similarity", selected_strategies,
             tariff_change_week=tariff_week,
