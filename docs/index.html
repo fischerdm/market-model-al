@@ -317,7 +317,7 @@
       </div>
       <div class="pipe-arrow">→</div>
       <div class="pipe-step">
-        <div class="lang">Oracle + pool</div>
+        <div class="lang">Oracle + warm start</div>
         <div class="label">Simulate aggregator</div>
       </div>
       <div class="pipe-arrow">→</div>
@@ -368,10 +368,18 @@
 
     <h3>Phase 2 — Active learning loop</h3>
     <p>
-      The profile pool is built by taking real policy rows as anchor points and varying
-      continuous features in small steps — mirroring how scraping is done in practice.
-      The oracle labels every profile. The competitor model is then trained on a warm-start
-      budget (~50k profiles) and iteratively refined by an AL query strategy.
+      The competitor model is seeded with a <strong>warm start</strong> combining two
+      components: (A) a random sample of real policy rows — simulating organic quote
+      requests arriving via comparis — and (B) structured ceteris-paribus profiles from
+      a small set of anchor rows, simulating an initial systematic scrape. The warm-start
+      mix ratio is a configurable experiment parameter.
+    </p>
+    <p>
+      The loop then runs <strong>weekly</strong>: each week, fresh anchor rows are sampled
+      from the real dataset, ceteris-paribus candidate profiles are generated on the fly,
+      and the query strategy selects <code>profiles_per_week</code> candidates to scrape.
+      The oracle labels only the selected profiles — the rest are discarded. The competitor
+      model is retrained after each week's batch.
     </p>
 
     <div class="table-wrap">
@@ -380,18 +388,32 @@
           <tr><th>AL strategy</th><th>Query criterion</th></tr>
         </thead>
         <tbody>
-          <tr><td>Uncertainty sampling</td><td>Profiles where the model's prediction variance is highest</td></tr>
-          <tr><td>Error-based</td><td>Profiles where the residual against the oracle is largest</td></tr>
-          <tr><td>SHAP divergence</td><td>Profiles where the SHAP structure of the competitor model diverges most from the oracle</td></tr>
+          <tr><td>Random</td><td>Uniform random baseline — no model required</td></tr>
+          <tr><td>Uncertainty sampling</td><td>Profiles with highest bootstrap prediction variance across ensemble members</td></tr>
+          <tr><td>Error-based</td><td>Profiles with highest expected absolute error, estimated by a proxy model trained on labeled residuals</td></tr>
+          <tr><td>SHAP divergence</td><td>Profiles where the L2 distance between oracle and competitor SHAP vectors is largest</td></tr>
         </tbody>
       </table>
     </div>
 
     <p>
-      Convergence is tracked in two complementary metrics: MSE against the oracle,
-      and SHAP structure similarity — a richer signal that captures whether the
-      competitor model has learned the same tariff <em>factors</em>, not just the
-      same premium levels.
+      Convergence is tracked in two complementary metrics: RMSE against the oracle,
+      and mean SHAP cosine similarity on a fixed holdout — a richer signal that captures
+      whether the competitor model has learned the same tariff <em>factors</em>, not just
+      the same premium levels.
+    </p>
+
+    <h3>Tariff change simulation</h3>
+    <p>
+      A <code>PerturbedOracleEngine</code> can be injected at any week to simulate a
+      competitor repricing event — for example, a young-driver surcharge of +20% or an
+      across-the-board price increase. After the switch, holdout labels are recomputed with
+      the new oracle so the RMSE curve measures recovery of the new tariff, not the old one.
+    </p>
+    <p>
+      This lets practitioners answer a critical operational question: is the weekly
+      continuous scraping rate sufficient to track a tariff change, or does the model
+      need a full restart with a fresh bulk scrape?
     </p>
   </section>
 
@@ -455,11 +477,18 @@
 
   <!-- ── AL RESULTS (placeholder) ── -->
   <section>
-    <h2>Active learning results <span style="font-size:0.85rem; font-weight:400; color:#7a90b8;">(in progress)</span></h2>
+    <h2>Active learning results <span style="font-size:0.85rem; font-weight:400; color:#7a90b8;">(simulation complete — dashboard in progress)</span></h2>
     <p>
-      The AL simulation loop is under active development. Results comparing query
-      strategies — convergence curves, SHAP similarity trajectories, and strategy
-      behaviour analysis — will be published here.
+      The AL simulation loop is implemented and produces per-week convergence metrics
+      across all four query strategies. Two experimental scenarios are run:
+    </p>
+    <ol style="margin: 14px 0 14px 24px;">
+      <li style="margin-bottom: 8px;"><strong>Strategy comparison</strong> — 52 weeks, no tariff change; baseline for comparing random, uncertainty, error-based, and SHAP-divergence sampling.</li>
+      <li style="margin-bottom: 8px;"><strong>Tariff change recovery</strong> — tariff change injected at week 26 (young-driver surcharge +20%); measures how quickly each strategy tracks the new pricing structure without a restart.</li>
+    </ol>
+    <p>
+      Full interactive results — convergence curves, SHAP similarity trajectories, and
+      side-by-side strategy comparisons — will be available in the Streamlit dashboard.
     </p>
   </section>
 

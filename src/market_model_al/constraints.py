@@ -9,7 +9,7 @@ import pandas as pd
 
 # Minimum legal driving age and minimum licence-obtaining age.
 MIN_DRIVING_AGE = 18.0
-MIN_LICENCE_AGE = 16.0  # used in cross-check: licence_age <= driver_age - 16
+MIN_AGE_AT_LICENSING = 18.0  # Spain: minimum age to obtain a driving licence
 
 # Per-feature lower bounds (upper bounds are not enforced — they are data
 # artefacts, not physical laws).
@@ -30,8 +30,8 @@ def validate(profiles: pd.DataFrame) -> pd.Series:
 
     Checks applied:
     - Each bounded continuous feature is >= its lower bound.
-    - ``licence_age <= driver_age - MIN_LICENCE_AGE`` (can't have obtained
-      a licence before the minimum licence age).
+    - ``licence_age <= driver_age - MIN_AGE_AT_LICENSING`` (can't have held
+      a licence for longer than driver_age - minimum licensing age).
     """
     mask = pd.Series(True, index=profiles.index)
 
@@ -40,6 +40,6 @@ def validate(profiles: pd.DataFrame) -> pd.Series:
             mask &= profiles[col] >= lb
 
     if "driver_age" in profiles.columns and "licence_age" in profiles.columns:
-        mask &= profiles["licence_age"] <= (profiles["driver_age"] - MIN_LICENCE_AGE)
+        mask &= profiles["licence_age"] <= (profiles["driver_age"] - MIN_AGE_AT_LICENSING)
 
     return mask
