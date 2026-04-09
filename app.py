@@ -23,17 +23,19 @@ RESULTS_PATH = ROOT / "outputs" / "al_results" / "results.parquet"
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 STRATEGY_LABELS = {
-    "random":          "Random",
-    "uncertainty":     "Uncertainty",
-    "error_based":     "Error-based",
-    "shap_divergence": "SHAP divergence",
+    "random":            "Random",
+    "uncertainty":       "Uncertainty",
+    "error_based":       "Error-based",
+    "shap_divergence":   "SHAP divergence",
+    "segment_adaptive":  "Segment-adaptive",
 }
 
 PALETTE = {
-    "random":          "#888888",
-    "uncertainty":     "#1f77b4",
-    "error_based":     "#ff7f0e",
-    "shap_divergence": "#2ca02c",
+    "random":            "#888888",
+    "uncertainty":       "#1f77b4",
+    "error_based":       "#ff7f0e",
+    "shap_divergence":   "#2ca02c",
+    "segment_adaptive":  "#9467bd",
 }
 
 METRIC_OPTIONS = {
@@ -147,7 +149,7 @@ with st.sidebar:
     ]
 
     st.subheader("Primary metric")
-    metric_label = st.radio("", list(METRIC_OPTIONS.keys()), index=0)
+    metric_label = st.radio("Metric", list(METRIC_OPTIONS.keys()), index=0, label_visibility="collapsed")
     metric_col = METRIC_OPTIONS[metric_label]
 
     st.subheader("About")
