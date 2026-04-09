@@ -142,6 +142,7 @@ class ALSimulation:
         candidate_multiplier: int = 10,
         tariff_change_week: int | None = None,
         perturbed_oracle=None,
+        restart_at_tariff_change: bool = False,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -168,6 +169,11 @@ class ALSimulation:
             Holdout labels are re-computed with the new oracle at that point.
         perturbed_oracle : PerturbedOracleEngine, optional
             Required when tariff_change_week is set.
+        restart_at_tariff_change : bool
+            If True, the entire labeled set (including warm start) is discarded
+            at tariff_change_week after that week's evaluation.  The model
+            re-learns exclusively from profiles labeled by the new oracle.
+            The RMSE spike at tariff_change_week is still recorded honestly.
 
         Returns
         -------
@@ -248,6 +254,13 @@ class ALSimulation:
 
             if week == n_weeks:
                 break
+
+            # ── Restart: discard all stale labels after tariff-change evaluation ─
+            if restart_at_tariff_change and post_change and week == tariff_change_week:
+                labeled_X = labeled_X.iloc[:0].copy()
+                labeled_y = np.array([], dtype=float)
+                print(f"  [week {week}] Restart — labeled set cleared, "
+                      "re-learning from new oracle only.", flush=True)
 
             # ── Sample candidate anchor pool ──────────────────────────────────
             cand_idx = rng.choice(self._anchor_pool_idx, size=n_candidates, replace=False)

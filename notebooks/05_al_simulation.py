@@ -128,6 +128,23 @@ for strategy in STRATEGIES:
     df_run["scenario"] = "tariff_change"
     results_s2.append(df_run)
 
+for strategy in ["random", "segment_adaptive"]:
+    print(f"\n--- {strategy}_restart + tariff change ---")
+    df_run = sim.run(
+        strategy=strategy,
+        warm_start_X=warm_start_X,
+        warm_start_y=warm_start_y,
+        weekly_budget=WEEKLY_BUDGET,
+        candidate_multiplier=CANDIDATE_MULT,
+        n_weeks=N_WEEKS,
+        tariff_change_week=TARIFF_CHANGE_WEEK,
+        perturbed_oracle=perturbed,
+        restart_at_tariff_change=True,
+    )
+    df_run["strategy"] = f"{strategy}_restart"
+    df_run["scenario"] = "tariff_change"
+    results_s2.append(df_run)
+
 # ── Save all results ───────────────────────────────────────────────────────────
 
 results = pd.concat(results_s1 + results_s2, ignore_index=True)
