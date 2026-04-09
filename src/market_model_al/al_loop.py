@@ -64,6 +64,7 @@ from market_model_al.strategies import (
     uncertainty_query,
     error_based_query,
     shap_divergence_query,
+    segment_adaptive_query,
 )
 
 
@@ -294,6 +295,10 @@ class ALSimulation:
         elif strategy == "shap_divergence":
             return shap_divergence_query(
                 self._oracle_explainer, competitor, candidate_anchors, n, rng
+            )
+        elif strategy == "segment_adaptive":
+            return segment_adaptive_query(
+                competitor, labeled_X, labeled_y, candidate_anchors, n, rng
             )
 
     def _shap_similarity(self, competitor: CompetitorModel) -> float:

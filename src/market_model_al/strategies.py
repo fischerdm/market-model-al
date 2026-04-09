@@ -156,6 +156,53 @@ def shap_divergence_query(
     return np.argsort(-divergence)[:n]
 
 
+def segment_adaptive_query(
+    competitor,             # CompetitorModel
+    labeled_X: pd.DataFrame,
+    labeled_y: np.ndarray,
+    anchor_pool: pd.DataFrame,
+    n: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Select n anchors with budget allocated proportionally to per-segment RMSE.
+
+    Per-segment RMSE is estimated on the **labeled set** (where ground truth is
+    available).  Each candidate anchor is scored as the global RMSE (baseline)
+    plus the RMSE of every named segment it belongs to.  This means:
+
+    - Anchors in high-error segments are prioritised over low-error ones.
+    - Anchors outside all named segments still compete via the global baseline,
+      preventing mainstream-population starvation.
+    - Anchors that fall into multiple high-error segments (e.g. a young driver
+      with a high-power car) receive extra priority.
+
+    As segment gaps close over time the RMSE differentials shrink and the
+    strategy naturally converges toward uniform random sampling.
+    """
+    from market_model_al.segments import SEGMENTS, segment_rmse
+
+    # Estimate per-segment RMSE on the labeled set
+    labeled_preds = competitor.predict(labeled_X)
+    residuals_sq  = (labeled_y - labeled_preds) ** 2
+    global_rmse   = float(np.sqrt(residuals_sq.mean()))
+    seg_rmses     = segment_rmse(labeled_X, labeled_y, labeled_preds)
+
+    # Score each candidate anchor: baseline + cumulative segment RMSE
+    scores = np.full(len(anchor_pool), global_rmse, dtype=float)
+    for seg in SEGMENTS:
+        rmse_val = seg_rmses.get(seg.key, float("nan"))
+        if np.isnan(rmse_val):
+            continue
+        mask = seg.filter_fn(anchor_pool).values
+        scores[mask] += rmse_val
+
+    # Small jitter so anchors within the same score bucket are selected randomly
+    # rather than by their position in the DataFrame.
+    scores += rng.uniform(0, 1e-6, size=len(scores))
+
+    return np.argsort(-scores)[:n]
+
+
 # ── registry ──────────────────────────────────────────────────────────────────
 
-STRATEGIES = ["random", "uncertainty", "error_based", "shap_divergence"]
+STRATEGIES = ["random", "uncertainty", "error_based", "shap_divergence", "segment_adaptive"]
