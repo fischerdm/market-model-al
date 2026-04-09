@@ -42,15 +42,19 @@ import shap
 
 
 def _encode_categoricals(X: pd.DataFrame) -> pd.DataFrame:
-    """Convert category columns to integer codes.
+    """Convert category and object columns to integer codes.
 
     Bootstrap and proxy models only need variance / error estimates and don't
     require LightGBM's categorical optimisation.  Integer codes avoid
     category-level mismatches when anchor pools cover only a subset of levels.
+
+    Object columns are included because rows originating from the warm start or
+    CP profiles may carry string-dtype categoricals that were not cast to the
+    pandas Categorical dtype before being appended to labeled_X.
     """
     result = X.copy()
-    for col in X.select_dtypes("category").columns:
-        result[col] = result[col].cat.codes
+    for col in X.select_dtypes(["category", "object"]).columns:
+        result[col] = result[col].astype("category").cat.codes
     return result
 
 
