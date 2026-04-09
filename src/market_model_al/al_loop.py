@@ -1,5 +1,5 @@
 """
-Active learning simulation loop — time-indexed, ad-hoc profile generation.
+Active learning simulation loop — anchor-based, weekly scraping budget.
 
 The simulation models the following real-world workflow:
 
@@ -8,17 +8,22 @@ The simulation models the following real-world workflow:
        (b) structured ceteris-paribus profiles — initial systematic scraping
      Both are oracle-labeled before the loop starts.
 
-  2. Weekly AL loop: each week the strategy selects which profiles to scrape.
-       - n_anchors_per_week anchor rows are sampled from the real dataset.
-       - Ceteris-paribus candidates are generated from those anchors.
-       - The chosen query strategy selects profiles_per_week candidates.
-       - The (current) oracle labels the selected profiles.
+  2. Weekly AL loop: each week the strategy selects which *anchor rows* to
+     scrape next, within a fixed profile budget.
+       - A candidate pool of anchor rows is drawn from the real dataset.
+       - The query strategy selects the best n_anchors from that pool.
+       - All ceteris-paribus profiles from the selected anchors are generated
+         and labeled by the (current) oracle.
        - The competitor model is retrained on the growing labeled set.
        - Convergence metrics are recorded.
 
+     Weekly budget:  n_anchors = weekly_budget // PROFILES_PER_ANCHOR
+     Candidate pool: candidate_multiplier × n_anchors anchors are scored,
+                     the top n_anchors are kept.
+
   3. Optional tariff change: at tariff_change_week the oracle is replaced by a
-     PerturbedOracleEngine.  The holdout labels switch to the new oracle,
-     so RMSE measures recovery of the new tariff — not the old one.
+     PerturbedOracleEngine.  The holdout labels switch to the new oracle so
+     RMSE measures recovery of the new tariff — not the old one.
 
 Usage
 -----
@@ -31,13 +36,13 @@ Usage
 
     sim = ALSimulation(oracle, real_X, seed=42)
 
-    # Scenario A: no tariff change
+    # Scenario A: no tariff change, 5 000 profiles/week
     results_a = sim.run("uncertainty", warm_start_X, warm_start_y,
-                        profiles_per_week=100, n_weeks=52)
+                        weekly_budget=5_000, n_weeks=52)
 
     # Scenario B: tariff change at week 26
     results_b = sim.run("uncertainty", warm_start_X, warm_start_y,
-                        profiles_per_week=100, n_weeks=52,
+                        weekly_budget=5_000, n_weeks=52,
                         tariff_change_week=26, perturbed_oracle=new_oracle)
 """
 
@@ -51,7 +56,8 @@ import shap
 from sklearn.metrics import mean_squared_error
 
 from market_model_al.competitor_model import CompetitorModel
-from market_model_al.profile_generator import generate_ceteris_paribus
+from market_model_al.profile_generator import generate_ceteris_paribus, PROFILES_PER_ANCHOR
+from market_model_al.segments import segment_rmse
 from market_model_al.strategies import (
     STRATEGIES,
     random_query,
@@ -92,8 +98,8 @@ class ALSimulation:
         self._master_rng = np.random.default_rng(seed)
         self._competitor_params = competitor_params
 
-        # Drop the small number of real rows with data-quality violations so the
-        # holdout and anchor pool never contain physically invalid profiles.
+        # Drop real rows with data-quality violations so the holdout and anchor
+        # pool never contain physically invalid profiles.
         real_X = real_X.reset_index(drop=True)
         valid_mask = oracle_engine.validate(real_X)
         n_invalid = (~valid_mask).sum()
@@ -113,14 +119,14 @@ class ALSimulation:
         # Label holdout with base oracle once; re-labelled at tariff change.
         self._holdout_y_base = oracle_engine.query(self._holdout_X)
 
-        # Oracle SHAP explainer (always based on the original LightGBM model,
-        # even after a tariff change — tracks structural similarity).
+        # Oracle SHAP explainer — always based on the original LightGBM model,
+        # used for convergence tracking and the shap_divergence strategy.
         print("Pre-computing oracle SHAP on holdout set…", flush=True)
         self._oracle_explainer = shap.TreeExplainer(oracle_engine._oracle)
         self._oracle_shap = self._oracle_explainer.shap_values(self._holdout_X)
         print(f"  Oracle SHAP shape: {self._oracle_shap.shape}\n", flush=True)
 
-        # Anchor pool = real rows minus holdout
+        # Anchor pool = all valid real rows minus holdout
         self._anchor_pool_idx = np.where(~self._holdout_mask)[0]
 
     # ── public ────────────────────────────────────────────────────────────────
@@ -130,9 +136,9 @@ class ALSimulation:
         strategy: str,
         warm_start_X: pd.DataFrame,
         warm_start_y: np.ndarray,
-        profiles_per_week: int = 100,
-        n_anchors_per_week: int = 8,
+        weekly_budget: int = 5_000,
         n_weeks: int = 52,
+        candidate_multiplier: int = 10,
         tariff_change_week: int | None = None,
         perturbed_oracle=None,
     ) -> pd.DataFrame:
@@ -146,14 +152,16 @@ class ALSimulation:
             Warm-start profiles (real rows + CP profiles combined).
         warm_start_y : np.ndarray
             Oracle labels for warm_start_X (aligned 1-D array).
-        profiles_per_week : int
-            Profiles added to the labeled set per week.
-        n_anchors_per_week : int
-            Anchor rows drawn from the real dataset each week.  Each anchor
-            generates one full ceteris-paribus sweep; total candidates per week
-            ≈ n_anchors_per_week × sum(len(grid) for each swept feature).
+        weekly_budget : int
+            Target number of profiles to scrape per week.
+            Converted to anchors as: n_anchors = weekly_budget // PROFILES_PER_ANCHOR.
         n_weeks : int
             Number of AL rounds after the warm start.
+        candidate_multiplier : int
+            The strategy scores (candidate_multiplier × n_anchors) candidate
+            anchors each week and selects the best n_anchors from that pool.
+            Higher values give strategies more room to differentiate but
+            increase scoring time.  Ignored for 'random'.
         tariff_change_week : int, optional
             If set, the oracle switches to perturbed_oracle at this week.
             Holdout labels are re-computed with the new oracle at that point.
@@ -163,13 +171,17 @@ class ALSimulation:
         Returns
         -------
         pd.DataFrame
-            Columns: strategy, week, n_labeled, rmse, rel_rmse,
-                     shap_cosine_similarity, post_tariff_change, elapsed_s
+            Columns: strategy, week, n_labeled, n_anchors_selected,
+                     profiles_added, rmse, rel_rmse, shap_cosine_similarity,
+                     post_tariff_change, elapsed_s
         """
         if strategy not in STRATEGIES:
             raise ValueError(f"Unknown strategy '{strategy}'.  Choose from {STRATEGIES}.")
         if tariff_change_week is not None and perturbed_oracle is None:
             raise ValueError("perturbed_oracle must be supplied when tariff_change_week is set.")
+
+        n_anchors = max(1, weekly_budget // PROFILES_PER_ANCHOR)
+        n_candidates = n_anchors * candidate_multiplier
 
         rng = np.random.default_rng(int(self._master_rng.integers(0, 2**31)))
 
@@ -186,8 +198,8 @@ class ALSimulation:
         competitor = CompetitorModel(params=self._competitor_params)
 
         print(f"Strategy : {strategy}")
-        print(f"  warm_start={len(labeled_X):,}  profiles/week={profiles_per_week}"
-              f"  anchors/week={n_anchors_per_week}  weeks={n_weeks}")
+        print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
+              f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}  weeks={n_weeks}")
         if tariff_change_week is not None:
             print(f"  tariff change at week {tariff_change_week}")
         print()
@@ -207,10 +219,12 @@ class ALSimulation:
             competitor.fit(labeled_X, labeled_y)
 
             # ── Evaluate on holdout ───────────────────────────────────────────
-            preds = competitor.predict(self._holdout_X)
-            rmse = float(np.sqrt(mean_squared_error(holdout_y, preds)))
+            preds   = competitor.predict(self._holdout_X)
+            rmse    = float(np.sqrt(mean_squared_error(holdout_y, preds)))
             rel_rmse = rmse / float(holdout_y.mean())
             shap_sim = self._shap_similarity(competitor)
+
+            seg_rmse = segment_rmse(self._holdout_X, holdout_y, preds)
 
             elapsed = time.perf_counter() - t0
             records.append(dict(
@@ -222,6 +236,7 @@ class ALSimulation:
                 shap_cosine_similarity=shap_sim,
                 post_tariff_change=post_change,
                 elapsed_s=elapsed,
+                **{f"rmse_{k}": v for k, v in seg_rmse.items()},
             ))
             print(
                 f"  week {week:3d} | labeled={len(labeled_X):6,} | "
@@ -233,40 +248,32 @@ class ALSimulation:
             if week == n_weeks:
                 break
 
-            # ── Generate weekly candidates ────────────────────────────────────
-            candidates_X = self._generate_candidates(n_anchors_per_week, rng)
+            # ── Sample candidate anchor pool ──────────────────────────────────
+            cand_idx = rng.choice(self._anchor_pool_idx, size=n_candidates, replace=False)
+            candidate_anchors = self._real_X.iloc[cand_idx].reset_index(drop=True)
 
-            # ── Select profiles_per_week via strategy ─────────────────────────
-            n_select = min(profiles_per_week, len(candidates_X))
-            chosen_idx = self._apply_strategy(
-                strategy, competitor, labeled_X, labeled_y, candidates_X, n_select, rng
+            # ── Select best anchors via strategy ──────────────────────────────
+            chosen_local = self._apply_strategy(
+                strategy, competitor, labeled_X, labeled_y,
+                candidate_anchors, n_anchors, rng,
             )
-            selected_X = candidates_X.iloc[chosen_idx].reset_index(drop=True)
+            selected_anchors = candidate_anchors.iloc[chosen_local]
 
-            # ── Label selected profiles with current oracle ───────────────────
-            valid_mask = current_oracle.validate(selected_X)
-            selected_X = selected_X[valid_mask].reset_index(drop=True)
-            if len(selected_X) == 0:
+            # ── Generate all CP profiles from selected anchors ────────────────
+            profiles = generate_ceteris_paribus(selected_anchors, validate=True)
+            if len(profiles) == 0:
                 continue
-            selected_y = current_oracle.query(selected_X)
+
+            # ── Label with current oracle ─────────────────────────────────────
+            labels = current_oracle.query(profiles)
 
             # ── Add to labeled set ────────────────────────────────────────────
-            labeled_X = pd.concat([labeled_X, selected_X], ignore_index=True)
-            labeled_y = np.concatenate([labeled_y, selected_y])
+            labeled_X = pd.concat([labeled_X, profiles], ignore_index=True)
+            labeled_y = np.concatenate([labeled_y, labels])
 
         return pd.DataFrame(records)
 
     # ── internal ──────────────────────────────────────────────────────────────
-
-    def _generate_candidates(
-        self,
-        n_anchors: int,
-        rng: np.random.Generator,
-    ) -> pd.DataFrame:
-        """Sample n_anchors from the anchor pool, generate CP candidates."""
-        idx = rng.choice(self._anchor_pool_idx, size=n_anchors, replace=True)
-        anchors = self._real_X.iloc[idx]
-        return generate_ceteris_paribus(anchors, validate=True)
 
     def _apply_strategy(
         self,
@@ -274,25 +281,25 @@ class ALSimulation:
         competitor: CompetitorModel,
         labeled_X: pd.DataFrame,
         labeled_y: np.ndarray,
-        candidates_X: pd.DataFrame,
+        candidate_anchors: pd.DataFrame,
         n: int,
         rng: np.random.Generator,
     ) -> np.ndarray:
         if strategy == "random":
-            return random_query(candidates_X, n, rng)
+            return random_query(candidate_anchors, n, rng)
         elif strategy == "uncertainty":
-            return uncertainty_query(competitor, labeled_X, labeled_y, candidates_X, n, rng)
+            return uncertainty_query(competitor, labeled_X, labeled_y, candidate_anchors, n, rng)
         elif strategy == "error_based":
-            return error_based_query(competitor, labeled_X, labeled_y, candidates_X, n, rng)
+            return error_based_query(competitor, labeled_X, labeled_y, candidate_anchors, n, rng)
         elif strategy == "shap_divergence":
             return shap_divergence_query(
-                self._oracle_explainer, competitor, candidates_X, n, rng
+                self._oracle_explainer, competitor, candidate_anchors, n, rng
             )
 
     def _shap_similarity(self, competitor: CompetitorModel) -> float:
         """Mean cosine similarity between oracle and competitor SHAP on holdout."""
         comp_shap = competitor.shap_values(self._holdout_X)
-        dot = (self._oracle_shap * comp_shap).sum(axis=1)
+        dot   = (self._oracle_shap * comp_shap).sum(axis=1)
         norm_o = np.linalg.norm(self._oracle_shap, axis=1) + 1e-12
         norm_c = np.linalg.norm(comp_shap, axis=1) + 1e-12
         return float((dot / (norm_o * norm_c)).mean())

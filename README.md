@@ -39,6 +39,18 @@ Convergence is tracked in two metrics: RMSE against the oracle, and SHAP cosine 
 
 **Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own?
 
+## Simulation findings (10-week run, 5 000 profiles/week)
+
+The strategies now operate on **anchor selection**: each week a candidate pool of real anchor rows is scored, the best anchors are selected, and all their ceteris-paribus profiles are generated and labeled. The weekly profile count is derived from the budget: `n_anchors = weekly_budget // 254`.
+
+| Finding | Detail |
+|---|---|
+| **Random beats sophisticated strategies globally** | On a population-representative holdout, random anchor sampling is competitive with or better than all three informativeness-based strategies at 10 weeks. |
+| **Error-based recovers young drivers faster** | Segment-level RMSE reveals that `error_based` converges faster than random on young drivers (age < 30) — the only segment where a sophisticated strategy wins. |
+| **SHAP divergence concentrates on edge cases** | By prioritising anchors with the largest oracle–competitor SHAP gap, `shap_divergence` over-samples rare, extreme profiles. SHAP cosine similarity bottoms out around week 8, reflecting distribution mismatch between scraped profiles and the population holdout. |
+| **Root cause: informativeness vs. representativeness** | Greedy informativeness strategies pull budget toward high-signal edge cases (young drivers, expensive cars, high power), starving mainstream segments that random covers proportionally. |
+| **Implication** | A single global greedy strategy is the wrong design. Explicit budget allocation across segments — applying informativeness scoring *within* each segment — is the natural next step (`segment_adaptive` strategy, in progress). |
+
 ## Project structure
 
 ```
