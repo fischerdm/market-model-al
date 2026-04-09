@@ -102,11 +102,17 @@ def uncertainty_query(
 ) -> np.ndarray:
     """Select n anchors where the competitor model is most uncertain.
 
+    Falls back to random selection when the labeled set is empty (e.g.
+    immediately after a restart).
+
     Uncertainty is estimated as the standard deviation of predictions across
     bootstrap-resampled models, evaluated directly at each candidate anchor.
     Anchors with high variance indicate regions where the competitor model
     lacks confidence — exactly where additional scraping is most valuable.
     """
+    if len(labeled_X) == 0:
+        return rng.choice(len(anchor_pool), size=n, replace=False)
+
     preds = np.zeros((n_boot, len(anchor_pool)))
     for i in range(n_boot):
         boot_idx = rng.choice(len(labeled_X), size=len(labeled_X), replace=True)
@@ -132,7 +138,13 @@ def error_based_query(
     A proxy LightGBM model is trained on (labeled_X, |residuals|) and used to
     predict the expected error magnitude at each candidate anchor.  Anchors
     where the competitor model is likely most wrong are prioritised.
+
+    Falls back to random selection when the labeled set is empty (e.g.
+    immediately after a restart).
     """
+    if len(labeled_X) == 0:
+        return rng.choice(len(anchor_pool), size=n, replace=False)
+
     residuals = np.abs(labeled_y - competitor.predict(labeled_X))
     proxy = _train_quick_lgb(labeled_X, residuals, rng)
     scores = proxy.predict(_encode_categoricals(anchor_pool))
@@ -182,7 +194,13 @@ def segment_adaptive_query(
 
     As segment gaps close over time the RMSE differentials shrink and the
     strategy naturally converges toward uniform random sampling.
+
+    Falls back to random selection when the labeled set is empty (e.g.
+    immediately after a restart).
     """
+    if len(labeled_X) == 0:
+        return rng.choice(len(anchor_pool), size=n, replace=False)
+
     from market_model_al.segments import SEGMENTS, segment_rmse
 
     # Estimate per-segment RMSE on the labeled set
