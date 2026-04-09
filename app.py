@@ -23,19 +23,23 @@ RESULTS_PATH = ROOT / "outputs" / "al_results" / "results.parquet"
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 STRATEGY_LABELS = {
-    "random":            "Random",
-    "uncertainty":       "Uncertainty",
-    "error_based":       "Error-based",
-    "shap_divergence":   "SHAP divergence",
-    "segment_adaptive":  "Segment-adaptive",
+    "random":                     "Random",
+    "uncertainty":                "Uncertainty",
+    "error_based":                "Error-based",
+    "shap_divergence":            "SHAP divergence",
+    "segment_adaptive":           "Segment-adaptive",
+    "random_restart":             "Random (restart)",
+    "segment_adaptive_restart":   "Segment-adaptive (restart)",
 }
 
 PALETTE = {
-    "random":            "#888888",
-    "uncertainty":       "#1f77b4",
-    "error_based":       "#ff7f0e",
-    "shap_divergence":   "#2ca02c",
-    "segment_adaptive":  "#9467bd",
+    "random":                     "#888888",
+    "uncertainty":                "#1f77b4",
+    "error_based":                "#ff7f0e",
+    "shap_divergence":            "#2ca02c",
+    "segment_adaptive":           "#9467bd",
+    "random_restart":             "#888888",
+    "segment_adaptive_restart":   "#9467bd",
 }
 
 METRIC_OPTIONS = {
@@ -67,12 +71,17 @@ def convergence_figure(
 
     for strat in strategies:
         grp = df[df["strategy"] == strat].sort_values("week")
+        is_restart = strat.endswith("_restart")
         fig.add_trace(go.Scatter(
             x=grp["week"],
             y=grp[metric],
             mode="lines+markers",
             name=STRATEGY_LABELS.get(strat, strat),
-            line=dict(color=PALETTE.get(strat, "#333"), width=2),
+            line=dict(
+                color=PALETTE.get(strat, "#333"),
+                width=2,
+                dash="dash" if is_restart else "solid",
+            ),
             marker=dict(size=6),
             hovertemplate=(
                 f"<b>{STRATEGY_LABELS.get(strat, strat)}</b><br>"
@@ -142,10 +151,14 @@ with st.sidebar:
     df_all = load_results()
 
     st.subheader("Strategies")
-    all_strategies = list(STRATEGY_LABELS.keys())
-    selected_strategies = [
-        s for s in all_strategies
+    base_strategies = [s for s in STRATEGY_LABELS if not s.endswith("_restart")]
+    selected_base = [
+        s for s in base_strategies
         if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}")
+    ]
+    # Restart variants follow their parent automatically (shown in tab 2 only)
+    selected_strategies = selected_base + [
+        f"{s}_restart" for s in ["random", "segment_adaptive"] if s in selected_base
     ]
 
     st.subheader("Primary metric")
