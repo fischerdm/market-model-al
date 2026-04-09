@@ -45,7 +45,7 @@ from market_model_al.profile_generator import generate_ceteris_paribus
 # ── Config (edit to experiment with different warm-start mixes) ───────────────
 
 CONFIG = dict(
-    real_rows_n   = 10_000,   # (A) real policy rows  (~10 % of the dataset)
+    real_rows_n   = 5_000,   # (A) real policy rows  (~1 week's scraping budget)
     cp_anchors_n  = 0,       # (B) CP anchors  →  50 × ~254 steps ≈ 12 k profiles
     seed          = 42,
 )
