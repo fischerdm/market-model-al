@@ -6,9 +6,9 @@ results for the dashboard.
 
 Configuration
 -------------
-  config/simulation.yaml      — n_weeks, budget, strategies, metrics
-  config/tariff_changes.yaml  — tariff-change scenarios (perturbation type,
-                                 injection week, restart strategies)
+  config/simulation.yaml      — n_weeks, budget, strategies, metrics,
+                                perturbation_schedule, restart_strategies
+  config/tariff_changes.yaml  — named perturbation library (type + params)
 
 Prerequisites
 -------------
@@ -17,9 +17,9 @@ Prerequisites
 Outputs
 -------
   outputs/al_results/results.parquet
-  outputs/figures/al_convergence_rmse.png   (scenario 1 only)
-  outputs/figures/al_convergence_shap.png   (scenario 1, if SHAP enabled)
-  outputs/figures/al_tariff_<name>_rmse.png (one per tariff-change scenario)
+  outputs/figures/al_convergence_rmse.png     (scenario 1)
+  outputs/figures/al_convergence_shap.png     (scenario 1, if SHAP enabled)
+  outputs/figures/al_tariff_<name>_rmse.png   (one per tariff-change scenario)
 """
 
 import sys
@@ -35,35 +35,37 @@ sys.path.insert(0, str(ROOT / "src"))
 from market_model_al.features import load_raw, engineer_features
 from market_model_al.oracle_engine import OraclePricingEngine
 from market_model_al.al_loop import ALSimulation
-from market_model_al.strategies import STRATEGIES
 from market_model_al.config import (
     load_simulation_cfg,
     load_tariff_changes_cfg,
+    resolve_scenarios,
     build_perturbed_oracle,
 )
 
 # ── Load config ────────────────────────────────────────────────────────────────
 
-sim_cfg = load_simulation_cfg(ROOT / "config" / "simulation.yaml")
-tc_list  = load_tariff_changes_cfg(ROOT / "config" / "tariff_changes.yaml")
+sim_cfg    = load_simulation_cfg(ROOT / "config" / "simulation.yaml")
+tc_library = load_tariff_changes_cfg(ROOT / "config" / "tariff_changes.yaml")
+scenarios  = resolve_scenarios(sim_cfg, tc_library)
 
 N_WEEKS        = sim_cfg["n_weeks"]
 WEEKLY_BUDGET  = sim_cfg["weekly_budget"]
 CANDIDATE_MULT = sim_cfg["candidate_multiplier"]
 SEED           = sim_cfg["seed"]
 STRATEGIES_RUN = sim_cfg["strategies"]
+RESTART_STRATS = sim_cfg["restart_strategies"]
 COMPUTE_SHAP   = sim_cfg["compute_shap_similarity"]
 
 print("Simulation config:")
 print(f"  n_weeks={N_WEEKS}  weekly_budget={WEEKLY_BUDGET}  "
       f"candidate_multiplier={CANDIDATE_MULT}  seed={SEED}")
-print(f"  strategies : {STRATEGIES_RUN}")
-print(f"  metrics    : {sorted(sim_cfg['metrics'])}")
-print(f"  SHAP sim   : {'enabled' if COMPUTE_SHAP else 'disabled'}")
-print(f"\nTariff-change scenarios ({len(tc_list)}):")
-for tc in tc_list:
-    print(f"  [{tc['name']}]  week={tc['week']}  "
-          f"restarts={tc['restart_strategies'] or 'none'}")
+print(f"  strategies        : {STRATEGIES_RUN}")
+print(f"  restart_strategies: {RESTART_STRATS}")
+print(f"  metrics           : {sorted(sim_cfg['metrics'])}")
+print(f"  SHAP similarity   : {'enabled' if COMPUTE_SHAP else 'disabled'}")
+print(f"\nTariff-change scenarios ({len(scenarios)}):")
+for sc in scenarios:
+    print(f"  [{sc['name']}]  week={sc['week']}  {sc['label']}")
 print()
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
@@ -114,7 +116,7 @@ sim = ALSimulation(
 )
 
 
-# ── Helper: run one strategy ──────────────────────────────────────────────────
+# ── Helper: single strategy run ───────────────────────────────────────────────
 
 def _run(strategy, scenario_name, tariff_change_week=None, perturbed=None,
          restart=False, strategy_label=None):
@@ -146,40 +148,35 @@ for strategy in STRATEGIES_RUN:
     print(f"\n--- {strategy} ---")
     results_s1.append(_run(strategy, "no_tariff_change"))
 
-# ── Scenarios 2+: one per tariff-change entry ─────────────────────────────────
+# ── Tariff-change scenarios ────────────────────────────────────────────────────
 
 all_tc_results: list[tuple[dict, list[pd.DataFrame]]] = []
 
-for tc in tc_list:
-    tc_name  = tc["name"]
-    tc_label = tc["label"]
-    tc_week  = tc["week"]
-    perturbed = build_perturbed_oracle(oracle, tc["perturbation"])
-    scenario_name = f"tariff_change_{tc_name}"
+for sc in scenarios:
+    sc_name   = sc["name"]
+    sc_label  = sc["label"]
+    tc_week   = sc["week"]
+    perturbed = build_perturbed_oracle(oracle, sc["perturb_cfg"])
 
     print("\n" + "=" * 60)
-    print(f"SCENARIO -- {tc_label}  (week {tc_week})")
+    print(f"SCENARIO -- {sc_label}  (week {tc_week})")
     print("=" * 60)
 
     tc_results = []
 
     for strategy in STRATEGIES_RUN:
         print(f"\n--- {strategy} ---")
-        tc_results.append(_run(
-            strategy, scenario_name,
-            tariff_change_week=tc_week, perturbed=perturbed,
-        ))
+        tc_results.append(_run(strategy, sc_name,
+                               tariff_change_week=tc_week, perturbed=perturbed))
 
-    for strategy in tc["restart_strategies"]:
+    for strategy in RESTART_STRATS:
         label = f"{strategy}_restart"
         print(f"\n--- {label} ---")
-        tc_results.append(_run(
-            strategy, scenario_name,
-            tariff_change_week=tc_week, perturbed=perturbed,
-            restart=True, strategy_label=label,
-        ))
+        tc_results.append(_run(strategy, sc_name,
+                               tariff_change_week=tc_week, perturbed=perturbed,
+                               restart=True, strategy_label=label))
 
-    all_tc_results.append((tc, tc_results))
+    all_tc_results.append((sc, tc_results))
 
 # ── Save all results ───────────────────────────────────────────────────────────
 
@@ -191,21 +188,11 @@ print(f"\nAll results saved -> {results_path}")
 
 # ── Plot helpers ───────────────────────────────────────────────────────────────
 
-def _strategy_color(s):
-    return PALETTE.get(s, "#333333")
+def _color(strategy):
+    return PALETTE.get(strategy, "#333333")
 
 
-def _plot_metric(ax, grp_data, metric, label_map=None):
-    for strategy, grp in grp_data:
-        label = label_map.get(strategy, strategy) if label_map else strategy
-        ax.plot(grp["week"], grp[metric], label=label,
-                color=_strategy_color(strategy), lw=2)
-    ax.set_xlabel("Week")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-
-# ── Plot: scenario 1 — RMSE convergence ───────────────────────────────────────
+# ── Plot: scenario 1 — convergence ────────────────────────────────────────────
 
 s1 = results[results["scenario"] == "no_tariff_change"]
 s1_groups = list(s1.groupby("strategy"))
@@ -216,14 +203,23 @@ if n_cols == 1:
     axes = [axes]
 fig.suptitle("Strategy comparison — no tariff change", fontsize=13)
 
-_plot_metric(axes[0], s1_groups, "rmse")
+for strategy, grp in s1_groups:
+    axes[0].plot(grp["week"], grp["rmse"], label=strategy, color=_color(strategy), lw=2)
+axes[0].set_xlabel("Week")
 axes[0].set_ylabel("RMSE on holdout")
 axes[0].set_title("Premium prediction error")
+axes[0].legend()
+axes[0].grid(True, alpha=0.3)
 
 if COMPUTE_SHAP:
-    _plot_metric(axes[1], s1_groups, "shap_cosine_similarity")
+    for strategy, grp in s1_groups:
+        axes[1].plot(grp["week"], grp["shap_cosine_similarity"],
+                     label=strategy, color=_color(strategy), lw=2)
+    axes[1].set_xlabel("Week")
     axes[1].set_ylabel("Mean cosine similarity")
     axes[1].set_title("SHAP structure recovery")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
 
 plt.tight_layout()
 p = FIGURES_DIR / "al_convergence_rmse.png"
@@ -233,29 +229,24 @@ plt.close()
 
 # ── Plot: one RMSE figure per tariff-change scenario ─────────────────────────
 
-for tc, tc_results in all_tc_results:
-    tc_name  = tc["name"]
-    tc_label = tc["label"]
-    tc_week  = tc["week"]
-    scenario_name = f"tariff_change_{tc_name}"
-
-    s2 = results[results["scenario"] == scenario_name]
+for sc, tc_results in all_tc_results:
+    sc_df = results[results["scenario"] == sc["name"]]
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.set_title(f"{tc_label}  (tariff change at week {tc_week})")
+    ax.set_title(f"{sc['label']}  (tariff change at week {sc['week']})")
 
-    for strategy, grp in s2.groupby("strategy"):
+    for strategy, grp in sc_df.groupby("strategy"):
         ax.plot(grp["week"], grp["rmse"], label=strategy,
-                color=_strategy_color(strategy), lw=2)
+                color=_color(strategy), lw=2)
 
-    ax.axvline(tc_week, color="red", linestyle="--", lw=1.5, label="tariff change")
+    ax.axvline(sc["week"], color="red", linestyle="--", lw=1.5, label="tariff change")
     ax.set_xlabel("Week")
     ax.set_ylabel("RMSE on holdout (vs new oracle)")
     ax.legend()
     ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    p = FIGURES_DIR / f"al_tariff_{tc_name}_rmse.png"
+    p = FIGURES_DIR / f"al_tariff_{sc['name']}_rmse.png"
     plt.savefig(p, dpi=150, bbox_inches="tight")
     print(f"Figure saved -> {p}")
     plt.close()
@@ -267,18 +258,17 @@ if COMPUTE_SHAP:
     metric_cols.append("shap_cosine_similarity")
 
 print(f"\nFinal metrics — scenario 1 (week {N_WEEKS}):")
-final_s1 = (
+print(
     s1[s1["week"] == N_WEEKS]
     .set_index("strategy")[metric_cols]
+    .to_string(float_format="{:.4f}".format)
 )
-print(final_s1.to_string(float_format="{:.4f}".format))
 
-for tc, _ in all_tc_results:
-    scenario_name = f"tariff_change_{tc['name']}"
-    s2 = results[results["scenario"] == scenario_name]
-    print(f"\nFinal metrics — {tc['label']} (week {N_WEEKS}):")
-    final_s2 = (
-        s2[s2["week"] == N_WEEKS]
+for sc, _ in all_tc_results:
+    sc_df = results[results["scenario"] == sc["name"]]
+    print(f"\nFinal metrics — {sc['label']} (week {N_WEEKS}):")
+    print(
+        sc_df[sc_df["week"] == N_WEEKS]
         .set_index("strategy")[metric_cols]
+        .to_string(float_format="{:.4f}".format)
     )
-    print(final_s2.to_string(float_format="{:.4f}".format))

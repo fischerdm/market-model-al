@@ -1,32 +1,16 @@
 # ── Simulation parameters ───────────────────────────────────────────────────
-#
-# n_weeks            : number of AL rounds after the warm start
-# weekly_budget      : target number of CP profiles to scrape per week
-# candidate_multiplier: strategy scores (multiplier × n_anchors) candidates
-#                       and selects the best n_anchors.  Ignored for 'random'.
-# seed               : master RNG seed; each run derives a sub-seed from it
-#
-# strategies         : list of query strategies to run in scenario 1 and in
-#                      every tariff-change scenario.  All strategies defined
-#                      in tariff_changes.yaml must also appear here (or be a
-#                      superset) for the runs to be meaningful.
-#                      Available: random, uncertainty, error_based,
-#                                 segment_adaptive, disruption
-#
-# metrics            : controls which convergence metrics are computed each
-#                      week.  Segment RMSE columns (rmse_<key>) are always
-#                      written; they are cheap and used by the dashboard.
-#                      - rmse                 : global RMSE on holdout (always on)
-#                      - rel_rmse             : RMSE / mean holdout premium
-#                      - shap_cosine_similarity: mean cosine sim of oracle vs
-#                        competitor SHAP vectors on holdout.  Requires oracle
-#                        SHAP precomputation at startup (~10 s).  Turn off to
-#                        speed up quick experiments.
+
+# n_weeks        : number of AL rounds after the warm start
+# weekly_budget  : target number of CP profiles to scrape per week
+# seed           : master RNG seed; each run derives a sub-seed from it
 
 n_weeks: 10
 weekly_budget: 5000
-candidate_multiplier: 10
 seed: 42
+
+# ── Strategies ──────────────────────────────────────────────────────────────
+# Which query strategies to run in every scenario.
+# Available: random, uncertainty, error_based, segment_adaptive, disruption
 
 strategies:
   - random
@@ -35,7 +19,54 @@ strategies:
   - segment_adaptive
   - disruption
 
+# ── Metrics ─────────────────────────────────────────────────────────────────
+# Controls which convergence metrics are computed each week.
+# Segment RMSE columns (rmse_<key>) are always written — they are cheap and
+# used by the dashboard.
+#
+#   rmse                  : global RMSE on holdout (always on)
+#   rel_rmse              : RMSE / mean holdout premium
+#   shap_cosine_similarity: mean cosine similarity of oracle vs competitor SHAP
+#                           vectors on holdout.  Requires oracle SHAP
+#                           precomputation at startup (~10 s).  Disable for
+#                           quick experiments.
+
 metrics:
   - rmse
   - rel_rmse
   - shap_cosine_similarity
+
+# ── Perturbation schedule ────────────────────────────────────────────────────
+# Defines which tariff-change scenarios to simulate.
+# Each entry is one independent scenario that produces its own set of runs.
+#
+#   week          : AL week at which the oracle switches (must be ≤ n_weeks)
+#   perturbations : list of perturbation names defined in tariff_changes.yaml;
+#                   multiple names are composed left-to-right (stacked shock)
+
+perturbation_schedule:
+  - week: 3
+    perturbations: [young_driver_surcharge, uniform_reprice]
+  - week: 4
+    perturbations: [high_value_surcharge, uniform_reprice]
+  - week: 5
+    perturbations: [area_reprice_urban_rural]
+
+# ── Restart strategies ───────────────────────────────────────────────────────
+# Strategies for which an additional "restart" run is executed in every
+# tariff-change scenario: the labeled set is cleared after the tariff-change
+# week's evaluation and the model re-learns from the new oracle only.
+# Set to [] to disable restarts entirely.
+
+restart_strategies:
+  - random
+  - segment_adaptive
+
+# ── Advanced ─────────────────────────────────────────────────────────────────
+# candidate_multiplier: informativeness strategies score
+#   (n_anchors × candidate_multiplier) candidates per week and keep the top
+#   n_anchors.  Higher = better selection quality, slower scoring.
+#   Has no effect on the 'random' strategy.
+
+advanced:
+  candidate_multiplier: 10
