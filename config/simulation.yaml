@@ -1,0 +1,41 @@
+# ── Simulation parameters ───────────────────────────────────────────────────
+#
+# n_weeks            : number of AL rounds after the warm start
+# weekly_budget      : target number of CP profiles to scrape per week
+# candidate_multiplier: strategy scores (multiplier × n_anchors) candidates
+#                       and selects the best n_anchors.  Ignored for 'random'.
+# seed               : master RNG seed; each run derives a sub-seed from it
+#
+# strategies         : list of query strategies to run in scenario 1 and in
+#                      every tariff-change scenario.  All strategies defined
+#                      in tariff_changes.yaml must also appear here (or be a
+#                      superset) for the runs to be meaningful.
+#                      Available: random, uncertainty, error_based,
+#                                 segment_adaptive, disruption
+#
+# metrics            : controls which convergence metrics are computed each
+#                      week.  Segment RMSE columns (rmse_<key>) are always
+#                      written; they are cheap and used by the dashboard.
+#                      - rmse                 : global RMSE on holdout (always on)
+#                      - rel_rmse             : RMSE / mean holdout premium
+#                      - shap_cosine_similarity: mean cosine sim of oracle vs
+#                        competitor SHAP vectors on holdout.  Requires oracle
+#                        SHAP precomputation at startup (~10 s).  Turn off to
+#                        speed up quick experiments.
+
+n_weeks: 10
+weekly_budget: 5000
+candidate_multiplier: 10
+seed: 42
+
+strategies:
+  - random
+  - uncertainty
+  - error_based
+  - segment_adaptive
+  - disruption
+
+metrics:
+  - rmse
+  - rel_rmse
+  - shap_cosine_similarity

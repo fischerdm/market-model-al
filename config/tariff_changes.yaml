@@ -1,0 +1,112 @@
+# ── Tariff-change scenarios ──────────────────────────────────────────────────
+#
+# Each entry defines one mid-run tariff change scenario.  The simulation runs
+# all configured strategies against every tariff change defined here.
+#
+# Fields per entry:
+#
+#   name               : identifier used in the results parquet and plot titles
+#   label              : human-readable description for plots/dashboard
+#   week               : AL week at which the oracle switches to the perturbed
+#                        version (1-based; must be ≤ n_weeks from simulation.yaml)
+#   perturbation       : defines what the competitor changed in their tariff
+#     type             : one of young_driver_surcharge, high_value_surcharge,
+#                        uniform_reprice, area_reprice, compose
+#     -- type-specific parameters follow --
+#   restart_strategies : strategies for which an additional "restart" run is
+#                        executed — labeled set is cleared after tariff-change
+#                        week evaluation, model re-learns from new oracle only.
+#                        Set to [] to disable restarts for this scenario.
+#
+# Perturbation types
+# ------------------
+# young_driver_surcharge
+#   factor         : premium multiplier applied to drivers below age_threshold
+#                    (e.g. 0.20 → +20 %)
+#   age_threshold  : (optional, default 30.0) driver_age cutoff in years
+#
+# high_value_surcharge
+#   factor          : premium multiplier for vehicles above value_threshold
+#   value_threshold : (optional, default 50000.0) Value_vehicle cutoff in €
+#
+# uniform_reprice
+#   factor          : multiplicative shift applied to all premiums
+#                     (e.g. 0.10 → +10 %, -0.05 → -5 %)
+#
+# area_reprice
+#   area_factors    : mapping of area code (int) → multiplier
+#                     (e.g. {1: 1.15, 3: 0.90}; unlisted areas unchanged)
+#
+# compose
+#   parts           : list of perturbation entries (same schema as above,
+#                     without restart_strategies); applied left-to-right
+
+tariff_changes:
+
+  # ── 1. Young-driver surcharge ─────────────────────────────────────────────
+  # Competitor repositions away from young-driver risk mid-year.
+  - name: young_driver_surcharge
+    label: "Young-driver surcharge +20 %"
+    week: 3
+    perturbation:
+      type: young_driver_surcharge
+      factor: 0.20
+      age_threshold: 30.0
+    restart_strategies:
+      - random
+      - segment_adaptive
+
+  # ── 2. High-value vehicle surcharge ──────────────────────────────────────
+  # Competitor reprices prestige / high-value vehicles upward.
+  - name: high_value_surcharge
+    label: "High-value vehicle surcharge +15 %"
+    week: 4
+    perturbation:
+      type: high_value_surcharge
+      factor: 0.15
+      value_threshold: 50000.0
+    restart_strategies: []
+
+  # ── 3. Uniform across-the-board reprice ──────────────────────────────────
+  # Competitor applies a flat rate increase (e.g. cost-inflation pass-through).
+  - name: uniform_reprice
+    label: "Uniform reprice +10 %"
+    week: 4
+    perturbation:
+      type: uniform_reprice
+      factor: 0.10
+    restart_strategies: []
+
+  # ── 4. Area-level repricing ───────────────────────────────────────────────
+  # Competitor adjusts rates for specific geographic areas.
+  # Area codes match the 'Area' column in the Spanish motor dataset (1–6).
+  - name: area_reprice
+    label: "Area repricing (urban +15 %, rural -10 %)"
+    week: 5
+    perturbation:
+      type: area_reprice
+      area_factors:
+        1: 1.15
+        2: 1.15
+        3: 0.90
+        4: 0.90
+    restart_strategies:
+      - disruption
+
+  # ── 5. Composed shock: young-driver + uniform lift ────────────────────────
+  # Combined repricing event: young-driver surcharge on top of a market-wide
+  # rate increase (e.g. regulatory capital requirement change).
+  - name: young_driver_plus_uniform
+    label: "Young-driver surcharge +20 % + uniform lift +5 %"
+    week: 3
+    perturbation:
+      type: compose
+      parts:
+        - type: young_driver_surcharge
+          factor: 0.20
+          age_threshold: 30.0
+        - type: uniform_reprice
+          factor: 0.05
+    restart_strategies:
+      - random
+      - disruption
