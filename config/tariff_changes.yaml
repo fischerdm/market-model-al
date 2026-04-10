@@ -1,0 +1,52 @@
+# ── Perturbation library ─────────────────────────────────────────────────────
+#
+# Named perturbation definitions referenced by simulation.yaml's
+# perturbation_schedule.  Each key is the identifier used in the schedule;
+# the type field selects the implementation.
+#
+# This file contains no timing information — weeks are defined in
+# simulation.yaml.  The same perturbation definition can be reused across
+# multiple schedule entries.
+#
+# Perturbation types
+# ------------------
+# young_driver_surcharge
+#   factor         : premium multiplier for drivers below age_threshold
+#                    (e.g. 0.20 → drivers < threshold pay 1.20 × base)
+#   age_threshold  : (optional, default 30.0) driver_age cutoff in years
+#
+# high_value_surcharge
+#   factor          : premium multiplier for vehicles above value_threshold
+#   value_threshold : (optional, default 50 000.0) Value_vehicle cutoff in €
+#
+# uniform_reprice
+#   factor          : multiplicative shift applied to all premiums
+#                     (e.g. 0.10 → +10 %, -0.05 → -5 %)
+#
+# area_reprice
+#   area_factors    : mapping of area code (int) → multiplier
+#                     areas not listed are unchanged
+
+young_driver_surcharge:
+  type: young_driver_surcharge
+  factor: 0.20
+  age_threshold: 30.0
+
+high_value_surcharge:
+  type: high_value_surcharge
+  factor: 0.15
+  value_threshold: 50000.0
+
+uniform_reprice:
+  type: uniform_reprice
+  factor: 0.10
+
+# Urban areas (1, 2) get a +15 % surcharge; rural areas (3, 4) a -10 % discount.
+# Area codes match the 'Area' column in the Spanish motor dataset (1–6).
+area_reprice_urban_rural:
+  type: area_reprice
+  area_factors:
+    1: 1.15
+    2: 1.15
+    3: 0.90
+    4: 0.90

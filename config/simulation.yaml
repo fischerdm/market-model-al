@@ -1,0 +1,94 @@
+# ── Global simulation parameters ────────────────────────────────────────────
+
+# n_weeks        : number of AL rounds after the warm start
+# weekly_budget  : target number of CP profiles to scrape per week
+# seed           : master RNG seed; each run derives a sub-seed from it
+
+n_weeks: 10
+weekly_budget: 5000
+seed: 42
+
+# ── Strategies ──────────────────────────────────────────────────────────────
+# Which query strategies to run in every simulation.
+# Available: random, uncertainty, error_based, segment_adaptive, disruption
+
+strategies:
+  - random
+  - uncertainty
+  - error_based
+  - segment_adaptive
+  - disruption
+
+# ── Metrics ─────────────────────────────────────────────────────────────────
+# Controls which convergence metrics are computed each week.
+# Segment RMSE columns (rmse_<key>) are always written — they are cheap and
+# used by the dashboard.
+#
+#   rmse                  : global RMSE on holdout (always on)
+#   rel_rmse              : RMSE / mean holdout premium
+#   shap_cosine_similarity: mean cosine similarity of oracle vs competitor SHAP
+#                           vectors on holdout.  Requires oracle SHAP
+#                           precomputation at startup (~10 s).  Disable for
+#                           quick experiments.
+
+metrics:
+  - rmse
+  - rel_rmse
+  - shap_cosine_similarity
+
+# ── Restart strategies ───────────────────────────────────────────────────────
+# Strategies for which an additional "restart" run is executed in every
+# simulation that contains tariff changes.  At each tariff change week the
+# labeled set is cleared and the model re-learns from the new oracle only.
+# Set to [] to disable restarts entirely.
+
+restart_strategies:
+  - random
+  - segment_adaptive
+
+# ── Simulations ──────────────────────────────────────────────────────────────
+# Each entry is one named simulation run per strategy.
+# Omitting tariff_changes (or leaving it empty) produces a baseline run with
+# no oracle switching.
+# Within a simulation, tariff_changes is a sequence of oracle switch events
+# applied in week order during the SAME run — the competitor model experiences
+# all shocks in a single timeline.
+#
+# tariff_changes fields:
+#   week          : AL week at which the oracle switches (must be ≤ n_weeks)
+#   perturbations : list of perturbation names from tariff_changes.yaml;
+#                   multiple names are composed left-to-right (stacked shock)
+
+simulations:
+
+  - name: baseline
+    label: "No tariff change"
+
+  - name: young_driver_shock
+    label: "Young-driver surcharge at week 3"
+    tariff_changes:
+      - week: 3
+        perturbations: [young_driver_surcharge]
+
+  - name: high_value_shock
+    label: "High-value vehicle surcharge at week 4"
+    tariff_changes:
+      - week: 4
+        perturbations: [high_value_surcharge]
+
+  - name: two_wave_repricing
+    label: "Young-driver surcharge (week 3) then area repricing (week 7)"
+    tariff_changes:
+      - week: 3
+        perturbations: [young_driver_surcharge]
+      - week: 7
+        perturbations: [area_reprice_urban_rural]
+
+# ── Advanced ─────────────────────────────────────────────────────────────────
+# candidate_multiplier: informativeness strategies score
+#   (n_anchors × candidate_multiplier) candidates per week and keep the top
+#   n_anchors.  Higher = better selection quality, slower scoring.
+#   Has no effect on the 'random' strategy.
+
+advanced:
+  candidate_multiplier: 10
