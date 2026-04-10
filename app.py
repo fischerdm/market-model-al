@@ -67,6 +67,28 @@ METRIC_HELP = {
     ),
 }
 
+# ── Themes ─────────────────────────────────────────────────────────────────────
+# "Dark" is the default from .streamlit/config.toml; no CSS override needed.
+# "Light" injects overrides that flip the key background/text surfaces back to
+# light values, plus switches Plotly to a matching template.
+
+_LIGHT_CSS = """
+<style>
+  .stApp                                        { background-color: #f6f8fa !important; color: #24292f !important; }
+  section[data-testid="stSidebar"] > div        { background-color: #ffffff !important; }
+  .stApp h1, .stApp h2, .stApp h3, .stMarkdown  { color: #24292f !important; }
+  [data-testid="stWidgetLabel"],
+  .stRadio label, .stCheckbox label             { color: #24292f !important; }
+  [data-testid="stMetricLabel"],
+  [data-testid="stMetricValue"]                 { color: #24292f !important; }
+</style>
+"""
+
+THEMES: dict[str, dict] = {
+    "Dark":  {"plotly": "plotly_dark",  "css": ""},
+    "Light": {"plotly": "plotly_white", "css": _LIGHT_CSS},
+}
+
 # ── Data loading ───────────────────────────────────────────────────────────────
 
 @st.cache_data
@@ -96,6 +118,7 @@ def convergence_figure(
     metric_label: str,
     strategies: list[str],
     change_weeks: list[int] | None = None,
+    plotly_theme: str = "plotly_dark",
 ) -> go.Figure:
     """Line chart: metric over weeks, one trace per strategy."""
     fig = go.Figure()
@@ -138,6 +161,9 @@ def convergence_figure(
         )
 
     fig.update_layout(
+        template=plotly_theme,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         xaxis_title="Week",
         yaxis_title=metric_label,
         legend_title="Strategy",
@@ -168,6 +194,7 @@ def segment_heatmap(
     df: pd.DataFrame,
     week: int,
     strategies: list[str],
+    plotly_theme: str = "plotly_dark",
 ) -> go.Figure:
     """Heatmap: strategies (rows) × segments (columns), colour = RMSE at *week*.
 
@@ -208,6 +235,9 @@ def segment_heatmap(
         hovertemplate="<b>%{y}</b><br>%{x}<br>RMSE: %{text}<extra></extra>",
     ))
     fig.update_layout(
+        template=plotly_theme,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         xaxis_title="Segment",
         yaxis_title="Strategy",
         height=max(200, 60 + 50 * len(strat_order)),
@@ -268,11 +298,27 @@ with st.sidebar:
         f"**Simulations:** {len(all_sims)}"
     )
 
+    st.divider()
+    st.subheader("Theme")
+    selected_theme = st.radio(
+        "Theme",
+        list(THEMES.keys()),
+        index=0,
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+
 # ── Guard: need at least one strategy ─────────────────────────────────────────
 
 if not selected_strategies:
     st.warning("Select at least one strategy in the sidebar.")
     st.stop()
+
+# ── Theme: inject CSS override and expose Plotly template ─────────────────────
+
+plotly_theme = THEMES[selected_theme]["plotly"]
+if THEMES[selected_theme]["css"]:
+    st.markdown(THEMES[selected_theme]["css"], unsafe_allow_html=True)
 
 # ── Simulation name → label mapping (derived from parquet + config) ────────────
 # We build a best-effort display name from the simulation column value.
@@ -359,6 +405,7 @@ with tab1:
     fig_t1 = convergence_figure(
         df_t1, metric_col_t1, metric_label_t1,
         selected_strategies, change_weeks=tc_weeks_t1,
+        plotly_theme=plotly_theme,
     )
     st.plotly_chart(fig_t1, use_container_width=True)
 
@@ -382,7 +429,7 @@ with tab1:
             value=all_weeks[-1],
             key="heatmap_week_t1",
         )
-        fig_heatmap = segment_heatmap(df_t1, heatmap_week, selected_strategies)
+        fig_heatmap = segment_heatmap(df_t1, heatmap_week, selected_strategies, plotly_theme=plotly_theme)
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
     # ── Summary table ─────────────────────────────────────────────────────────
@@ -459,7 +506,8 @@ with tab2:
             col = f"rmse_{seg.key}"
             st.subheader(f"{seg.label}  —  {seg.description}")
             fig = convergence_figure(
-                df_t2, col, "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t2
+                df_t2, col, "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t2,
+                plotly_theme=plotly_theme,
             )
             st.plotly_chart(fig, use_container_width=True)
 
