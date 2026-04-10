@@ -21,6 +21,8 @@ RESULTS_PATH = ROOT / "outputs" / "al_results" / "results.parquet"
 
 sys.path.insert(0, str(ROOT / "src"))
 
+from market_model_al.segments import SEGMENTS  # noqa: E402 — needs sys.path first
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 STRATEGY_LABELS = {
@@ -160,6 +162,59 @@ def summary_table(df: pd.DataFrame, strategies: list[str]) -> pd.DataFrame:
     final.index.name = "Strategy"
     final.columns = col_labels
     return final
+
+
+def segment_heatmap(
+    df: pd.DataFrame,
+    week: int,
+    strategies: list[str],
+) -> go.Figure:
+    """Heatmap: strategies (rows) × segments (columns), colour = RMSE at *week*.
+
+    Red = high error, green = low error.  Missing values (NaN) are shown in grey.
+    """
+    seg_keys   = [seg.key   for seg in SEGMENTS]
+    seg_labels = [seg.label for seg in SEGMENTS]
+
+    snap = df[df["week"] == week].copy()
+    snap = snap[snap["strategy"].isin(strategies)]
+
+    # Build matrix: rows = strategies (in sidebar order), cols = segments
+    strat_labels = [STRATEGY_LABELS.get(s, s) for s in strategies if not snap[snap["strategy"] == s].empty]
+    strat_order  = [s for s in strategies if not snap[snap["strategy"] == s].empty]
+
+    z, text = [], []
+    for strat in strat_order:
+        row_df = snap[snap["strategy"] == strat]
+        row_z, row_t = [], []
+        for key in seg_keys:
+            col = f"rmse_{key}"
+            val = row_df[col].values[0] if col in row_df.columns and len(row_df) else float("nan")
+            row_z.append(val if pd.notna(val) else None)
+            row_t.append(f"{val:.2f}" if pd.notna(val) else "n/a")
+        z.append(row_z)
+        text.append(row_t)
+
+    fig = go.Figure(go.Heatmap(
+        z=z,
+        x=seg_labels,
+        y=[STRATEGY_LABELS.get(s, s) for s in strat_order],
+        text=text,
+        texttemplate="%{text}",
+        textfont=dict(size=12),
+        colorscale="RdYlGn_r",
+        colorbar=dict(title="RMSE (€)"),
+        hoverongaps=False,
+        hovertemplate="<b>%{y}</b><br>%{x}<br>RMSE: %{text}<extra></extra>",
+    ))
+    fig.update_layout(
+        xaxis_title="Segment",
+        yaxis_title="Strategy",
+        height=max(200, 60 + 50 * len(strat_order)),
+        margin=dict(l=0, r=0, t=10, b=0),
+        yaxis=dict(autorange="reversed"),
+    )
+    return fig
 
 
 # ── Page setup ─────────────────────────────────────────────────────────────────
@@ -307,6 +362,29 @@ with tab1:
     )
     st.plotly_chart(fig_t1, use_container_width=True)
 
+    # ── Segment composition heatmap ───────────────────────────────────────────
+    seg_cols_t1 = [f"rmse_{seg.key}" for seg in SEGMENTS]
+    if all(c in df_t1.columns for c in seg_cols_t1):
+        st.subheader(
+            "Segment RMSE heatmap",
+            help=(
+                "RMSE broken down by actuarial segment for a chosen week. "
+                "Red = high error, green = low error. "
+                "Use the slider to scrub through time and see how each strategy's "
+                "error shifts across segments — greedy strategies tend to fix one "
+                "segment at the cost of starving others."
+            ),
+        )
+        all_weeks   = sorted(df_t1["week"].unique().tolist())
+        heatmap_week = st.select_slider(
+            "Week",
+            options=all_weeks,
+            value=all_weeks[-1],
+            key="heatmap_week_t1",
+        )
+        fig_heatmap = segment_heatmap(df_t1, heatmap_week, selected_strategies)
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+
     # ── Summary table ─────────────────────────────────────────────────────────
     st.subheader(f"Final-week summary (week {n_weeks})")
     tbl = summary_table(df_t1, selected_strategies)
@@ -349,8 +427,6 @@ with tab1:
 # ──────────────────────────────────────────────────────────────────────────────
 
 with tab2:
-    from market_model_al.segments import SEGMENTS
-
     seg_cols   = [f"rmse_{seg.key}" for seg in SEGMENTS]
     has_segs   = all(c in df_all.columns for c in seg_cols)
 
