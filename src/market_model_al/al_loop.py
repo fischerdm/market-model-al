@@ -94,10 +94,12 @@ class ALSimulation:
         real_X: pd.DataFrame,
         seed: int = 42,
         competitor_params: dict | None = None,
+        compute_shap_similarity: bool = True,
     ) -> None:
         self._oracle = oracle_engine
         self._master_rng = np.random.default_rng(seed)
         self._competitor_params = competitor_params
+        self._compute_shap_similarity = compute_shap_similarity
 
         # Drop real rows with data-quality violations so the holdout and anchor
         # pool never contain physically invalid profiles.
@@ -120,12 +122,18 @@ class ALSimulation:
         # Label holdout with base oracle once; re-labelled at tariff change.
         self._holdout_y_base = oracle_engine.query(self._holdout_X)
 
-        # Oracle SHAP explainer — always based on the original LightGBM model,
-        # used for convergence tracking and the shap_divergence strategy.
-        print("Pre-computing oracle SHAP on holdout set…", flush=True)
-        self._oracle_explainer = shap.TreeExplainer(oracle_engine._oracle)
-        self._oracle_shap = self._oracle_explainer.shap_values(self._holdout_X)
-        print(f"  Oracle SHAP shape: {self._oracle_shap.shape}\n", flush=True)
+        # Oracle SHAP explainer — only pre-computed when SHAP similarity is needed,
+        # as it adds ~10 s at startup and is not observable in real-world deployment.
+        if self._compute_shap_similarity:
+            print("Pre-computing oracle SHAP on holdout set…", flush=True)
+            self._oracle_explainer = shap.TreeExplainer(oracle_engine._oracle)
+            self._oracle_shap = self._oracle_explainer.shap_values(self._holdout_X)
+            print(f"  Oracle SHAP shape: {self._oracle_shap.shape}\n", flush=True)
+        else:
+            self._oracle_explainer = None
+            self._oracle_shap = None
+            print("SHAP similarity disabled — skipping oracle SHAP precomputation.\n",
+                  flush=True)
 
         # Anchor pool = all valid real rows minus holdout
         self._anchor_pool_idx = np.where(~self._holdout_mask)[0]
@@ -230,7 +238,7 @@ class ALSimulation:
             preds   = competitor.predict(self._holdout_X)
             rmse    = float(np.sqrt(mean_squared_error(holdout_y, preds)))
             rel_rmse = rmse / float(holdout_y.mean())
-            shap_sim = self._shap_similarity(competitor)
+            shap_sim = self._shap_similarity(competitor) if self._compute_shap_similarity else float("nan")
 
             seg_rmse = segment_rmse(self._holdout_X, holdout_y, preds)
 
