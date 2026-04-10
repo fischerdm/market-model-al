@@ -26,7 +26,6 @@ STRATEGY_LABELS = {
     "random":                     "Random",
     "uncertainty":                "Uncertainty",
     "error_based":                "Error-based",
-    "shap_divergence":            "SHAP divergence",
     "segment_adaptive":           "Segment-adaptive",
     "disruption":                 "Disruption-adaptive",
     "random_restart":             "Random (restart)",
@@ -37,7 +36,6 @@ PALETTE = {
     "random":                     "#888888",
     "uncertainty":                "#1f77b4",
     "error_based":                "#ff7f0e",
-    "shap_divergence":            "#2ca02c",
     "segment_adaptive":           "#9467bd",
     "disruption":                 "#d62728",
     "random_restart":             "#888888",
@@ -219,17 +217,17 @@ with tab1:
 
     with col2:
         st.subheader(
-            "SHAP cosine similarity",
+            "SHAP cosine similarity  ⚗️ simulation only",
             help=(
                 "Measures how well the competitor model has recovered the global tariff structure "
                 "of the oracle — not just accuracy in specific regions, but whether each feature "
                 "pushes prices in the right direction and with the right relative magnitude. "
                 "A score of 1 means perfect structural alignment.\n\n"
-                "⚠️ SHAP divergence greedily targets anchors where oracle and competitor "
-                "disagree most. This concentrates scraping on edge cases (young drivers, "
-                "high-power cars) and starves mainstream segments of labels — the model learns "
-                "those regions well but loses global structural alignment, causing SHAP similarity "
-                "to drop over time."
+                "Simulation-only metric: computed by comparing the competitor model's SHAP values "
+                "against the oracle's SHAP values on the holdout set. In a real-world deployment "
+                "you do not have access to the competitor's internal model, so this metric cannot "
+                "be observed in practice. It is included here as a diagnostic to reveal how well "
+                "each strategy recovers the underlying tariff structure, not just prediction accuracy."
             ),
         )
         fig_shap = convergence_figure(
@@ -289,17 +287,17 @@ with tab2:
 
     with col2:
         st.subheader(
-            "SHAP similarity recovery",
+            "SHAP similarity recovery  ⚗️ simulation only",
             help=(
                 "Measures how well the competitor model has recovered the global tariff structure "
                 "of the oracle — not just accuracy in specific regions, but whether each feature "
                 "pushes prices in the right direction and with the right relative magnitude. "
                 "A score of 1 means perfect structural alignment.\n\n"
-                "⚠️ SHAP divergence greedily targets anchors where oracle and competitor "
-                "disagree most. This concentrates scraping on edge cases (young drivers, "
-                "high-power cars) and starves mainstream segments of labels — the model learns "
-                "those regions well but loses global structural alignment, causing SHAP similarity "
-                "to drop over time."
+                "Simulation-only metric: computed by comparing the competitor model's SHAP values "
+                "against the oracle's SHAP values on the holdout set. In a real-world deployment "
+                "you do not have access to the competitor's internal model, so this metric cannot "
+                "be observed in practice. It is included here as a diagnostic to reveal how well "
+                "each strategy recovers the underlying tariff structure, not just prediction accuracy."
             ),
         )
         fig_tc_shap = convergence_figure(
@@ -480,35 +478,6 @@ with tab4:
                 "Global RMSE and SHAP similarity suffer from the resulting distribution mismatch.",
             ],
             "when": "Best when you care primarily about one known high-error segment rather than global convergence.",
-        },
-        {
-            "name": "SHAP divergence",
-            "key": "shap_divergence",
-            "tag": "Informativeness — simulation only",
-            "tag_color": "#2ca02c",
-            "summary": "Computes SHAP values for both oracle and competitor at each candidate anchor and selects anchors with the largest L2 divergence.",
-            "detail": (
-                "SHAP values decompose a model's prediction into the contribution of each feature. "
-                "L2 divergence is the Euclidean distance between two SHAP vectors: "
-                "sqrt(sum of squared per-feature differences). A large L2 distance means the two models "
-                "attribute risk very differently at that point in feature space — the oracle says driver age "
-                "is the dominant factor, say, while the competitor model says it is vehicle power. "
-                "**Important limitation:** this strategy requires access to the oracle's SHAP values to score "
-                "candidate anchors. In a real-world competitor-modelling setting you do not have the oracle — "
-                "it is the competitor's internal model. This strategy is therefore only feasible inside this "
-                "simulation, where the oracle is known. It serves as a theoretical benchmark, not a deployable strategy."
-            ),
-            "strengths": [
-                "Targets structural misalignment in feature attributions, not just prediction error.",
-                "In theory the most principled signal for tariff structure recovery — if you had oracle access.",
-            ],
-            "weaknesses": [
-                "Requires access to the oracle model — not available in any real-world deployment.",
-                "Highly greedy: concentrates on edge cases (young drivers, high-power cars) and starves mainstream segments.",
-                "Global SHAP similarity drops over time — the strategy optimises for local agreement at the cost of global structural alignment.",
-                "Slowest strategy: requires computing SHAP for the full candidate pool each week.",
-            ],
-            "when": "Simulation benchmark only. Not deployable in practice. Included to show the ceiling of SHAP-guided informativeness strategies — and to demonstrate that even oracle-informed greediness loses to random on global metrics.",
         },
         {
             "name": "Segment-adaptive",

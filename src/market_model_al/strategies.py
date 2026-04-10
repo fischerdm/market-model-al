@@ -35,7 +35,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
-import shap
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -153,26 +152,6 @@ def error_based_query(
     scores = proxy.predict(_encode_categoricals(anchor_pool))
     return np.argsort(-scores)[:n]
 
-
-def shap_divergence_query(
-    oracle_explainer: shap.TreeExplainer,
-    competitor,             # CompetitorModel
-    anchor_pool: pd.DataFrame,
-    n: int,
-    rng: np.random.Generator,
-) -> np.ndarray:
-    """Select n anchors where oracle and competitor SHAP vectors diverge most.
-
-    SHAP values are computed at each candidate anchor for both the oracle and
-    the competitor model.  Divergence is measured as the L2 norm of the
-    per-feature SHAP difference.  High divergence means the competitor model
-    has a fundamentally different attribution of risk factors in that region —
-    the most informative region to scrape next.
-    """
-    oracle_shap     = oracle_explainer.shap_values(anchor_pool)       # (k, F)
-    competitor_shap = competitor.shap_values(anchor_pool)              # (k, F)
-    divergence      = np.linalg.norm(oracle_shap - competitor_shap, axis=1)
-    return np.argsort(-divergence)[:n]
 
 
 def segment_adaptive_query(
@@ -308,5 +287,4 @@ def disruption_query(
 
 # ── registry ──────────────────────────────────────────────────────────────────
 
-STRATEGIES = ["random", "uncertainty", "error_based", "shap_divergence",
-              "segment_adaptive", "disruption"]
+STRATEGIES = ["random", "uncertainty", "error_based", "segment_adaptive", "disruption"]

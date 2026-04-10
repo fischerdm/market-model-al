@@ -63,7 +63,6 @@ from market_model_al.strategies import (
     random_query,
     uncertainty_query,
     error_based_query,
-    shap_divergence_query,
     segment_adaptive_query,
     disruption_query,
 )
@@ -313,10 +312,6 @@ class ALSimulation:
             return uncertainty_query(competitor, labeled_X, labeled_y, candidate_anchors, n, rng)
         elif strategy == "error_based":
             return error_based_query(competitor, labeled_X, labeled_y, candidate_anchors, n, rng)
-        elif strategy == "shap_divergence":
-            return shap_divergence_query(
-                self._oracle_explainer, competitor, candidate_anchors, n, rng
-            )
         elif strategy == "segment_adaptive":
             return segment_adaptive_query(
                 competitor, labeled_X, labeled_y, candidate_anchors, n, rng
