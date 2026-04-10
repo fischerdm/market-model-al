@@ -447,6 +447,12 @@ with tab4:
             "tag": "Informativeness",
             "tag_color": "#1f77b4",
             "summary": "Trains several bootstrap-resampled models and selects anchors where their predictions disagree most (high variance).",
+            "detail": (
+                "Bootstrap resampling means fitting the same model type multiple times, each time on a random sample "
+                "drawn with replacement from the labeled set. Because each bootstrap sample omits some rows and "
+                "duplicates others, the resulting models differ slightly. Where they disagree strongly on a prediction, "
+                "the labeled set provides weak or conflicting signal in that region — a proxy for model uncertainty."
+            ),
             "strengths": [
                 "Targets regions where the model genuinely lacks confidence.",
                 "Does not require oracle access during scoring.",
@@ -463,9 +469,10 @@ with tab4:
             "key": "error_based",
             "tag": "Informativeness",
             "tag_color": "#ff7f0e",
-            "summary": "Trains a proxy model on labeled residuals and selects anchors predicted to have the highest absolute error.",
+            "summary": "Trains a proxy model on labeled relative residuals and selects anchors predicted to have the highest relative error.",
             "strengths": [
                 "Directly targets where the competitor model is currently most wrong.",
+                "Uses relative residuals (error / premium) so high-premium policies are not systematically over-sampled.",
                 "Recovers specific high-error segments faster than random (e.g. young drivers).",
             ],
             "weaknesses": [
@@ -477,19 +484,31 @@ with tab4:
         {
             "name": "SHAP divergence",
             "key": "shap_divergence",
-            "tag": "Informativeness",
+            "tag": "Informativeness — simulation only",
             "tag_color": "#2ca02c",
             "summary": "Computes SHAP values for both oracle and competitor at each candidate anchor and selects anchors with the largest L2 divergence.",
+            "detail": (
+                "SHAP values decompose a model's prediction into the contribution of each feature. "
+                "L2 divergence is the Euclidean distance between two SHAP vectors: "
+                "sqrt(sum of squared per-feature differences). A large L2 distance means the two models "
+                "attribute risk very differently at that point in feature space — the oracle says driver age "
+                "is the dominant factor, say, while the competitor model says it is vehicle power. "
+                "**Important limitation:** this strategy requires access to the oracle's SHAP values to score "
+                "candidate anchors. In a real-world competitor-modelling setting you do not have the oracle — "
+                "it is the competitor's internal model. This strategy is therefore only feasible inside this "
+                "simulation, where the oracle is known. It serves as a theoretical benchmark, not a deployable strategy."
+            ),
             "strengths": [
                 "Targets structural misalignment in feature attributions, not just prediction error.",
-                "In theory the most principled signal for tariff structure recovery.",
+                "In theory the most principled signal for tariff structure recovery — if you had oracle access.",
             ],
             "weaknesses": [
+                "Requires access to the oracle model — not available in any real-world deployment.",
                 "Highly greedy: concentrates on edge cases (young drivers, high-power cars) and starves mainstream segments.",
-                "Global SHAP similarity *drops* over time — the strategy optimises for local agreement at the cost of global structural alignment.",
+                "Global SHAP similarity drops over time — the strategy optimises for local agreement at the cost of global structural alignment.",
                 "Slowest strategy: requires computing SHAP for the full candidate pool each week.",
             ],
-            "when": "Not recommended as a standalone strategy. The distribution mismatch it creates undermines the very metric it targets.",
+            "when": "Simulation benchmark only. Not deployable in practice. Included to show the ceiling of SHAP-guided informativeness strategies — and to demonstrate that even oracle-informed greediness loses to random on global metrics.",
         },
         {
             "name": "Segment-adaptive",
@@ -532,6 +551,9 @@ with tab4:
 
     for info in strategies_info:
         with st.expander(f"**{info['name']}**  —  {info['summary']}", expanded=False):
+            if "detail" in info:
+                st.markdown(info["detail"])
+                st.divider()
             col_s, col_w = st.columns(2)
             with col_s:
                 st.markdown("**Strengths**")
