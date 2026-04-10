@@ -49,6 +49,7 @@ Usage
 from __future__ import annotations
 
 import time
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -148,8 +149,7 @@ class ALSimulation:
         weekly_budget: int = 5_000,
         n_weeks: int = 52,
         candidate_multiplier: int = 10,
-        tariff_change_week: int | None = None,
-        perturbed_oracle=None,
+        tariff_changes: list[tuple[int, Any]] | None = None,
         restart_at_tariff_change: bool = False,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
@@ -157,7 +157,8 @@ class ALSimulation:
         Parameters
         ----------
         strategy : str
-            One of: 'random', 'uncertainty', 'error_based', 'shap_divergence'.
+            One of: 'random', 'uncertainty', 'error_based',
+                    'segment_adaptive', 'disruption'.
         warm_start_X : pd.DataFrame
             Warm-start profiles (real rows + CP profiles combined).
         warm_start_y : np.ndarray
@@ -172,30 +173,33 @@ class ALSimulation:
             anchors each week and selects the best n_anchors from that pool.
             Higher values give strategies more room to differentiate but
             increase scoring time.  Ignored for 'random'.
-        tariff_change_week : int, optional
-            If set, the oracle switches to perturbed_oracle at this week.
-            Holdout labels are re-computed with the new oracle at that point.
-        perturbed_oracle : PerturbedOracleEngine, optional
-            Required when tariff_change_week is set.
+        tariff_changes : list of (week, PerturbedOracleEngine), optional
+            Sequence of oracle switch events applied within this single run,
+            sorted by week.  At each scheduled week the oracle switches and
+            holdout labels are re-computed with the new oracle, so RMSE
+            measures recovery of the *currently active* tariff.
+            Multiple events produce a multi-shock timeline within one run.
         restart_at_tariff_change : bool
-            If True, the entire labeled set (including warm start) is discarded
-            at tariff_change_week after that week's evaluation.  The model
-            re-learns exclusively from profiles labeled by the new oracle.
-            The RMSE spike at tariff_change_week is still recorded honestly.
+            If True, the entire labeled set is discarded after each tariff-change
+            week's evaluation.  The model re-learns from scratch using only
+            profiles labeled by the new oracle.  Applied at *every* change week,
+            not just the first.
 
         Returns
         -------
         pd.DataFrame
-            Columns: strategy, week, n_labeled, n_anchors_selected,
-                     profiles_added, rmse, rel_rmse, shap_cosine_similarity,
-                     post_tariff_change, elapsed_s
+            Columns: strategy, week, n_labeled, rmse, rel_rmse,
+                     shap_cosine_similarity, post_tariff_change,
+                     tariff_change_applied, elapsed_s, rmse_<segment>…
         """
         if strategy not in STRATEGIES:
             raise ValueError(f"Unknown strategy '{strategy}'.  Choose from {STRATEGIES}.")
-        if tariff_change_week is not None and perturbed_oracle is None:
-            raise ValueError("perturbed_oracle must be supplied when tariff_change_week is set.")
 
-        n_anchors = max(1, weekly_budget // PROFILES_PER_ANCHOR)
+        # Sort change events by week and build a fast lookup set
+        tc_schedule: list[tuple[int, Any]] = sorted(tariff_changes or [], key=lambda x: x[0])
+        tc_weeks = {w for w, _ in tc_schedule}
+
+        n_anchors    = max(1, weekly_budget // PROFILES_PER_ANCHOR)
         n_candidates = n_anchors * candidate_multiplier
 
         rng = np.random.default_rng(int(self._master_rng.integers(0, 2**31)))
@@ -204,10 +208,10 @@ class ALSimulation:
         labeled_X = warm_start_X.copy().reset_index(drop=True)
         labeled_y = np.asarray(warm_start_y, dtype=float).copy()
 
-        # Current oracle (may switch at tariff_change_week)
+        # Current oracle — updated at each scheduled tariff change
         current_oracle = self._oracle
-        holdout_y = self._holdout_y_base.copy()
-        post_change = False
+        holdout_y      = self._holdout_y_base.copy()
+        post_change    = False          # True after the first change
 
         records = []
         competitor = CompetitorModel(params=self._competitor_params)
@@ -216,29 +220,36 @@ class ALSimulation:
         print(f"Strategy : {strategy}")
         print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
               f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}  weeks={n_weeks}")
-        if tariff_change_week is not None:
-            print(f"  tariff change at week {tariff_change_week}")
+        if tc_schedule:
+            changes_str = ", ".join(f"week {w}" for w, _ in tc_schedule)
+            print(f"  tariff changes at: {changes_str}"
+                  + (" (with restart)" if restart_at_tariff_change else ""))
         print()
 
         # Week 0 = warm-start evaluation (no queries yet)
         for week in range(n_weeks + 1):
             t0 = time.perf_counter()
 
-            # ── Switch oracle at tariff_change_week ───────────────────────────
-            if tariff_change_week is not None and week == tariff_change_week and not post_change:
-                current_oracle = perturbed_oracle
-                holdout_y = perturbed_oracle.query(self._holdout_X)
-                post_change = True
-                print(f"  [week {week}] Tariff change injected — holdout labels updated.")
+            # ── Apply any tariff change(s) scheduled for this week ────────────
+            change_applied_this_week = False
+            for tc_week, tc_oracle in tc_schedule:
+                if week == tc_week:
+                    current_oracle = tc_oracle
+                    holdout_y      = tc_oracle.query(self._holdout_X)
+                    post_change    = True
+                    change_applied_this_week = True
+                    print(f"  [week {week}] Tariff change injected — holdout labels updated.",
+                          flush=True)
 
             # ── Train competitor on current labeled set ────────────────────────
             competitor.fit(labeled_X, labeled_y)
 
             # ── Evaluate on holdout ───────────────────────────────────────────
-            preds   = competitor.predict(self._holdout_X)
-            rmse    = float(np.sqrt(mean_squared_error(holdout_y, preds)))
+            preds    = competitor.predict(self._holdout_X)
+            rmse     = float(np.sqrt(mean_squared_error(holdout_y, preds)))
             rel_rmse = rmse / float(holdout_y.mean())
-            shap_sim = self._shap_similarity(competitor) if self._compute_shap_similarity else float("nan")
+            shap_sim = (self._shap_similarity(competitor)
+                        if self._compute_shap_similarity else float("nan"))
 
             seg_rmse = segment_rmse(self._holdout_X, holdout_y, preds)
 
@@ -251,6 +262,7 @@ class ALSimulation:
                 rel_rmse=rel_rmse,
                 shap_cosine_similarity=shap_sim,
                 post_tariff_change=post_change,
+                tariff_change_applied=change_applied_this_week,
                 elapsed_s=elapsed,
                 **{f"rmse_{k}": v for k, v in seg_rmse.items()},
             ))
@@ -267,11 +279,11 @@ class ALSimulation:
             # ── Carry segment RMSEs forward for disruption detection ──────────
             prev_seg_rmses = seg_rmse
 
-            # ── Restart: discard all stale labels after tariff-change evaluation ─
-            if restart_at_tariff_change and post_change and week == tariff_change_week:
-                labeled_X = labeled_X.iloc[:0].copy()
-                labeled_y = np.array([], dtype=float)
-                prev_seg_rmses = None   # reset state so disruption fires cleanly next week
+            # ── Restart after evaluation at every tariff-change week ──────────
+            if restart_at_tariff_change and change_applied_this_week:
+                labeled_X      = labeled_X.iloc[:0].copy()
+                labeled_y      = np.array([], dtype=float)
+                prev_seg_rmses = None   # reset so disruption fires cleanly next week
                 print(f"  [week {week}] Restart — labeled set cleared, "
                       "re-learning from new oracle only.", flush=True)
 

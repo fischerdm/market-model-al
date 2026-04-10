@@ -7,23 +7,21 @@ factory helpers that build perturbation functions and perturbed oracle engines.
 Usage
 -----
     from market_model_al.config import load_simulation_cfg, load_tariff_changes_cfg
-    from market_model_al.config import resolve_scenarios, build_perturbed_oracle
+    from market_model_al.config import resolve_simulations, build_perturbed_oracle
 
     sim_cfg    = load_simulation_cfg("config/simulation.yaml")
     tc_library = load_tariff_changes_cfg("config/tariff_changes.yaml")
-    scenarios  = resolve_scenarios(sim_cfg, tc_library)
+    simulations = resolve_simulations(sim_cfg, tc_library)
 
     # sim_cfg keys:
     #   n_weeks, weekly_budget, candidate_multiplier, seed,
-    #   strategies, metrics, compute_shap_similarity,
-    #   perturbation_schedule, restart_strategies
-    #
-    # tc_library: dict of name → perturbation-param dict
-    #
-    # scenarios: list of dicts with keys:
-    #   name, label, week, perturbation_names, perturb_cfg, restart_strategies
+    #   strategies, metrics, compute_shap_similarity, restart_strategies
 
-    perturbed = build_perturbed_oracle(oracle_engine, scenario["perturb_cfg"])
+    # simulations: list of dicts with keys:
+    #   name, label, has_tariff_changes,
+    #   tariff_changes: list of (week: int, perturb_cfg: dict) sorted by week
+
+    perturbed = build_perturbed_oracle(oracle, perturb_cfg)
 """
 
 from __future__ import annotations
@@ -36,7 +34,7 @@ import yaml
 
 # ── Simulation config ─────────────────────────────────────────────────────────
 
-_VALID_METRICS = {"rmse", "rel_rmse", "shap_cosine_similarity"}
+_VALID_METRICS   = {"rmse", "rel_rmse", "shap_cosine_similarity"}
 _REQUIRED_METRICS = {"rmse"}
 
 
@@ -45,18 +43,18 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
 
     Returns a dict with keys:
         n_weeks, weekly_budget, candidate_multiplier, seed,
-        strategies, metrics, compute_shap_similarity,
-        perturbation_schedule, restart_strategies
+        strategies, restart_strategies, metrics, compute_shap_similarity,
+        simulations (raw list — pass to resolve_simulations for full resolution)
     """
     raw = _load_yaml(path)
 
     cfg: dict[str, Any] = {}
-    cfg["n_weeks"]              = int(raw["n_weeks"])
-    cfg["weekly_budget"]        = int(raw["weekly_budget"])
-    cfg["seed"]                 = int(raw["seed"])
-    cfg["strategies"]           = list(raw["strategies"])
-    cfg["restart_strategies"]   = list(raw.get("restart_strategies") or [])
-    cfg["perturbation_schedule"] = list(raw.get("perturbation_schedule") or [])
+    cfg["n_weeks"]             = int(raw["n_weeks"])
+    cfg["weekly_budget"]       = int(raw["weekly_budget"])
+    cfg["seed"]                = int(raw["seed"])
+    cfg["strategies"]          = list(raw["strategies"])
+    cfg["restart_strategies"]  = list(raw.get("restart_strategies") or [])
+    cfg["simulations_raw"]     = list(raw.get("simulations") or [])
 
     advanced = raw.get("advanced") or {}
     cfg["candidate_multiplier"] = int(advanced.get("candidate_multiplier", 10))
@@ -69,13 +67,6 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
     metrics |= _REQUIRED_METRICS
     cfg["metrics"] = metrics
     cfg["compute_shap_similarity"] = "shap_cosine_similarity" in metrics
-
-    for i, entry in enumerate(cfg["perturbation_schedule"]):
-        if "week" not in entry or "perturbations" not in entry:
-            raise ValueError(
-                f"simulation.yaml perturbation_schedule[{i}]: "
-                "each entry must have 'week' and 'perturbations'"
-            )
 
     return cfg
 
@@ -103,81 +94,64 @@ def load_tariff_changes_cfg(path: str | Path) -> dict[str, dict[str, Any]]:
     return library
 
 
-# ── Scenario resolution ───────────────────────────────────────────────────────
+# ── Simulation resolution ─────────────────────────────────────────────────────
 
-def resolve_scenarios(
+def resolve_simulations(
     sim_cfg: dict[str, Any],
     tc_library: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Combine simulation schedule with the perturbation library.
+    """Resolve the simulations list from sim_cfg against the perturbation library.
 
-    Returns a list of scenario dicts with keys:
+    Returns a list of simulation dicts, each with keys:
         name               : slug used in results parquet and figure filenames
-        label              : human-readable description for plots/dashboard
-        week               : AL week the oracle switches
-        perturbation_names : list of names from tariff_changes.yaml
-        perturb_cfg        : resolved perturbation config (compose if multiple)
-        restart_strategies : from sim_cfg (global)
+        label              : human-readable description for plots / dashboard
+        has_tariff_changes : bool — False for baseline runs
+        tariff_changes     : list of (week: int, perturb_cfg: dict) sorted by week
     """
-    scenarios = []
-    name_counts: dict[str, int] = {}  # deduplicate names when the same perturbs appear twice
+    simulations = []
+    for i, entry in enumerate(sim_cfg["simulations_raw"]):
+        if "name" not in entry:
+            raise ValueError(f"simulation.yaml simulations[{i}]: missing 'name'")
+        if "label" not in entry:
+            raise ValueError(f"simulation.yaml simulations[{i}] ({entry['name']}): missing 'label'")
 
-    for entry in sim_cfg["perturbation_schedule"]:
-        week = int(entry["week"])
-        names: list[str] = list(entry["perturbations"])
+        raw_changes = entry.get("tariff_changes") or []
+        resolved_changes: list[tuple[int, dict]] = []
 
-        # Validate all names exist in library
-        for n in names:
-            if n not in tc_library:
+        for j, change in enumerate(raw_changes):
+            if "week" not in change or "perturbations" not in change:
                 raise ValueError(
-                    f"simulation.yaml references unknown perturbation '{n}'. "
-                    f"Defined in tariff_changes.yaml: {list(tc_library)}"
+                    f"simulation.yaml simulations[{i}].tariff_changes[{j}]: "
+                    "each entry must have 'week' and 'perturbations'"
                 )
+            week  = int(change["week"])
+            names = list(change["perturbations"])
 
-        base_name = "_".join(names)
-        count = name_counts.get(base_name, 0)
-        name_counts[base_name] = count + 1
-        unique_name = f"w{week}_{base_name}" + (f"_{count}" if count else "")
+            for n in names:
+                if n not in tc_library:
+                    raise ValueError(
+                        f"simulation.yaml references unknown perturbation '{n}'. "
+                        f"Defined in tariff_changes.yaml: {list(tc_library)}"
+                    )
 
-        if len(names) == 1:
-            perturb_cfg = tc_library[names[0]]
-            label = _make_label(names[0], tc_library[names[0]])
-        else:
-            # Compose: wrap in a synthetic compose config
-            parts = [tc_library[n] for n in names]
-            perturb_cfg = {"type": "compose", "parts": parts}
-            label = " + ".join(_make_label(n, tc_library[n]) for n in names)
+            if len(names) == 1:
+                perturb_cfg = tc_library[names[0]]
+            else:
+                perturb_cfg = {"type": "compose", "parts": [tc_library[n] for n in names]}
 
-        scenarios.append({
-            "name":               unique_name,
-            "label":              label,
-            "week":               week,
-            "perturbation_names": names,
-            "perturb_cfg":        perturb_cfg,
-            "restart_strategies": sim_cfg["restart_strategies"],
+            resolved_changes.append((week, perturb_cfg))
+
+        # Sort by week so the loop can apply them in chronological order
+        resolved_changes.sort(key=lambda x: x[0])
+
+        simulations.append({
+            "name":               str(entry["name"]),
+            "label":              str(entry["label"]),
+            "has_tariff_changes": bool(resolved_changes),
+            "tariff_changes":     resolved_changes,
         })
 
-    return scenarios
-
-
-def _make_label(name: str, params: dict) -> str:
-    """Human-readable label derived from the perturbation definition."""
-    ptype = params["type"]
-    factor = params.get("factor")
-    sign = "+" if factor and factor >= 0 else ""
-    pct = f"{sign}{factor * 100:.0f} %" if factor is not None else ""
-
-    if ptype == "young_driver_surcharge":
-        thr = params.get("age_threshold", 30)
-        return f"Young-driver surcharge {pct} (age < {thr:.0f})"
-    if ptype == "high_value_surcharge":
-        thr = params.get("value_threshold", 50_000)
-        return f"High-value vehicle surcharge {pct} (> €{thr:,.0f})"
-    if ptype == "uniform_reprice":
-        return f"Uniform reprice {pct}"
-    if ptype == "area_reprice":
-        return f"Area repricing ({name})"
-    return name
+    return simulations
 
 
 # ── Perturbation factory ──────────────────────────────────────────────────────

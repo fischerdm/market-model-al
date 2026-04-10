@@ -9,16 +9,17 @@ Run with:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-
 ROOT         = Path(__file__).parent
 RESULTS_PATH = ROOT / "outputs" / "al_results" / "results.parquet"
+
+sys.path.insert(0, str(ROOT / "src"))
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -43,9 +44,9 @@ PALETTE = {
 }
 
 METRIC_OPTIONS = {
-    "RMSE (€)":                    "rmse",
-    "Relative RMSE":               "rel_rmse",
-    "SHAP cosine similarity":      "shap_cosine_similarity",
+    "RMSE (€)":               "rmse",
+    "Relative RMSE":          "rel_rmse",
+    "SHAP cosine similarity": "shap_cosine_similarity",
 }
 
 # ── Data loading ───────────────────────────────────────────────────────────────
@@ -53,24 +54,38 @@ METRIC_OPTIONS = {
 @st.cache_data
 def load_results() -> pd.DataFrame:
     df = pd.read_parquet(RESULTS_PATH)
-    df["strategy_label"] = df["strategy"].map(STRATEGY_LABELS)
+    df["strategy_label"] = df["strategy"].map(STRATEGY_LABELS).fillna(df["strategy"])
     return df
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+def has_shap(df: pd.DataFrame) -> bool:
+    """True when the results contain non-NaN SHAP similarity values."""
+    return "shap_cosine_similarity" in df.columns and df["shap_cosine_similarity"].notna().any()
+
+
+def tariff_change_weeks(df: pd.DataFrame) -> list[int]:
+    """Return sorted list of weeks where a tariff change was applied."""
+    if "tariff_change_applied" not in df.columns:
+        return []
+    return sorted(df[df["tariff_change_applied"]]["week"].unique().tolist())
+
 
 def convergence_figure(
     df: pd.DataFrame,
     metric: str,
     metric_label: str,
     strategies: list[str],
-    tariff_change_week: int | None = None,
+    change_weeks: list[int] | None = None,
 ) -> go.Figure:
     """Line chart: metric over weeks, one trace per strategy."""
     fig = go.Figure()
 
     for strat in strategies:
         grp = df[df["strategy"] == strat].sort_values("week")
+        if grp.empty:
+            continue
         is_restart = strat.endswith("_restart")
         fig.add_trace(go.Scatter(
             x=grp["week"],
@@ -92,13 +107,14 @@ def convergence_figure(
             customdata=grp["n_labeled"].values,
         ))
 
-    if tariff_change_week is not None:
+    for i, w in enumerate(change_weeks or []):
+        label = f"change {i + 1}" if len(change_weeks or []) > 1 else "tariff change"
         fig.add_vline(
-            x=tariff_change_week,
+            x=w,
             line_dash="dash",
             line_color="red",
             line_width=1.5,
-            annotation_text="tariff change",
+            annotation_text=label,
             annotation_position="top right",
             annotation_font_color="red",
         )
@@ -114,17 +130,12 @@ def convergence_figure(
     return fig
 
 
-def has_shap(df: pd.DataFrame) -> bool:
-    """True when the results contain non-NaN SHAP similarity values."""
-    return "shap_cosine_similarity" in df.columns and df["shap_cosine_similarity"].notna().any()
-
-
 def summary_table(df: pd.DataFrame, strategies: list[str]) -> pd.DataFrame:
     """Final-week metrics for each strategy, formatted for display."""
     max_week = df["week"].max()
     final = df[df["week"] == max_week].copy()
     final = final[final["strategy"].isin(strategies)]
-    cols = ["n_labeled", "rmse", "rel_rmse"]
+    cols       = ["n_labeled", "rmse", "rel_rmse"]
     col_labels = ["Labeled profiles", "RMSE (€)", "Relative RMSE"]
     if has_shap(df):
         cols.append("shap_cosine_similarity")
@@ -157,6 +168,7 @@ with st.sidebar:
         st.stop()
 
     df_all = load_results()
+    n_weeks = df_all["week"].max()
 
     st.subheader("Strategies")
     base_strategies = [s for s in STRATEGY_LABELS if not s.endswith("_restart")]
@@ -164,31 +176,31 @@ with st.sidebar:
         s for s in base_strategies
         if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}")
     ]
-    # Restart variants follow their parent automatically (shown in tab 2 only)
     selected_strategies = selected_base + [
         f"{s}_restart" for s in ["random", "segment_adaptive"] if s in selected_base
     ]
 
     st.subheader("Primary metric")
-    metric_label = st.radio("Metric", list(METRIC_OPTIONS.keys()), index=0, label_visibility="collapsed")
+    metric_label = st.radio(
+        "Metric", list(METRIC_OPTIONS.keys()), index=0, label_visibility="collapsed"
+    )
     metric_col = METRIC_OPTIONS[metric_label]
 
     st.subheader("About")
-    n_weeks = df_all["week"].max()
-    n_rows  = df_all[df_all["scenario"] == "no_tariff_change"]["n_labeled"].max()
+    n_rows = df_all["n_labeled"].max()
     weekly_added = (
-        df_all[df_all["scenario"] == "no_tariff_change"]
-        .sort_values(["strategy", "week"])
-        .groupby("strategy")["n_labeled"]
+        df_all.sort_values(["simulation", "strategy", "week"])
+        .groupby(["simulation", "strategy"])["n_labeled"]
         .diff()
         .dropna()
         .median()
     )
+    all_sims = df_all["simulation"].unique().tolist()
     st.markdown(
         f"**Simulation:** {n_weeks} weeks  \n"
         f"**Max labeled:** {n_rows:,} profiles  \n"
         f"**~profiles/week:** {int(weekly_added):,}  \n"
-        f"**Scenarios:** {', '.join(df_all['scenario'].unique())}"
+        f"**Simulations:** {len(all_sims)}"
     )
 
 # ── Guard: need at least one strategy ─────────────────────────────────────────
@@ -197,19 +209,57 @@ if not selected_strategies:
     st.warning("Select at least one strategy in the sidebar.")
     st.stop()
 
+# ── Simulation name → label mapping (derived from parquet + config) ────────────
+# We build a best-effort display name from the simulation column value.
+# Config labels are the ground truth but the parquet only stores the name slug.
+# Attempt to load them from config; fall back to the raw name.
+
+@st.cache_data
+def simulation_labels() -> dict[str, str]:
+    try:
+        from market_model_al.config import (
+            load_simulation_cfg, load_tariff_changes_cfg, resolve_simulations
+        )
+        cfg     = load_simulation_cfg(ROOT / "config" / "simulation.yaml")
+        library = load_tariff_changes_cfg(ROOT / "config" / "tariff_changes.yaml")
+        sims    = resolve_simulations(cfg, library)
+        return {s["name"]: s["label"] for s in sims}
+    except Exception:
+        return {}
+
+sim_labels = simulation_labels()
+
+
+def sim_display(name: str) -> str:
+    return sim_labels.get(name, name)
+
+
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4 = st.tabs(["Strategy comparison", "Tariff change recovery", "Segment breakdown", "Strategy guide"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Strategy comparison", "Tariff change recovery",
+    "Segment breakdown", "Strategy guide",
+])
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Tab 1: Strategy comparison (no tariff change)
+# Tab 1: Strategy comparison — user picks any simulation
 # ──────────────────────────────────────────────────────────────────────────────
 
 with tab1:
-    df_s1 = df_all[df_all["scenario"] == "no_tariff_change"]
-    df_s1 = df_s1[df_s1["strategy"].isin(selected_strategies)]
+    sim_options_t1 = df_all["simulation"].unique().tolist()
+    selected_sim_t1 = st.selectbox(
+        "Simulation",
+        options=sim_options_t1,
+        format_func=sim_display,
+        key="sim_select_t1",
+    )
+    df_t1 = df_all[
+        (df_all["simulation"] == selected_sim_t1)
+        & df_all["strategy"].isin(selected_strategies)
+    ]
+    tc_weeks_t1 = tariff_change_weeks(df_t1)
 
-    st.header("Strategy comparison — no tariff change")
+    st.header(sim_display(selected_sim_t1))
     st.caption(
         "Each week the strategy selects which anchor rows to scrape. "
         "All ceteris-paribus profiles from the selected anchors are generated and labeled. "
@@ -226,45 +276,47 @@ with tab1:
                 "before any training begins. These rows are oracle-labeled once and never used "
                 "as anchors or training data during the AL loop. RMSE is computed on this set "
                 "each week, so it is comparable across strategies and weeks.\n\n"
-                "Because the holdout is drawn from the real data distribution, it is "
-                "population-representative — a strategy that performs well here has learned "
-                "the tariff broadly, not just in the regions it chose to scrape."
+                "After a tariff change, holdout labels switch to the new oracle — so RMSE "
+                "measures recovery of the currently active tariff."
             ),
         )
-        fig_rmse = convergence_figure(df_s1, "rmse", "RMSE (€)", selected_strategies)
+        fig_rmse = convergence_figure(
+            df_t1, "rmse", "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t1
+        )
         st.plotly_chart(fig_rmse, use_container_width=True)
 
     with col2:
-        if has_shap(df_s1):
+        if has_shap(df_t1):
             st.subheader(
                 "SHAP cosine similarity  ⚗️ simulation only",
                 help=(
-                    "Measures how well the competitor model has recovered the global tariff structure "
-                    "of the oracle — not just accuracy in specific regions, but whether each feature "
-                    "pushes prices in the right direction and with the right relative magnitude. "
-                    "A score of 1 means perfect structural alignment.\n\n"
-                    "Simulation-only metric: computed by comparing the competitor model's SHAP values "
-                    "against the oracle's SHAP values on the holdout set. In a real-world deployment "
-                    "you do not have access to the competitor's internal model, so this metric cannot "
-                    "be observed in practice. It is included here as a diagnostic to reveal how well "
-                    "each strategy recovers the underlying tariff structure, not just prediction accuracy."
+                    "Measures how well the competitor model has recovered the global tariff "
+                    "structure of the oracle — not just accuracy in specific regions, but whether "
+                    "each feature pushes prices in the right direction and with the right relative "
+                    "magnitude.  A score of 1 means perfect structural alignment.\n\n"
+                    "Simulation-only metric: requires access to the oracle's internal model."
                 ),
             )
             fig_shap = convergence_figure(
-                df_s1, "shap_cosine_similarity", "Cosine similarity", selected_strategies
+                df_t1, "shap_cosine_similarity", "Cosine similarity",
+                selected_strategies, change_weeks=tc_weeks_t1,
             )
             st.plotly_chart(fig_shap, use_container_width=True)
         else:
-            st.info("SHAP similarity was disabled in `config/simulation.yaml` for this run.", icon="ℹ️")
+            st.info(
+                "SHAP similarity was disabled in `config/simulation.yaml` for this run.",
+                icon="ℹ️",
+            )
 
-    # Relative RMSE as an alternative metric (shown only if selected)
     if metric_col == "rel_rmse":
         st.subheader("Relative RMSE")
-        fig_rel = convergence_figure(df_s1, "rel_rmse", "Relative RMSE", selected_strategies)
+        fig_rel = convergence_figure(
+            df_t1, "rel_rmse", "Relative RMSE", selected_strategies, change_weeks=tc_weeks_t1
+        )
         st.plotly_chart(fig_rel, use_container_width=True)
 
     st.subheader(f"Final-week summary (week {n_weeks})")
-    tbl = summary_table(df_s1, selected_strategies)
+    tbl = summary_table(df_t1, selected_strategies)
     st.dataframe(
         tbl.style.format({
             "Labeled profiles": "{:,.0f}",
@@ -276,169 +328,149 @@ with tab1:
     )
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Tab 2: Tariff change recovery
+# Tab 2: Tariff change recovery — only simulations that have changes
 # ──────────────────────────────────────────────────────────────────────────────
 
 with tab2:
-    tc_scenario_names = [s for s in df_all["scenario"].unique() if s != "no_tariff_change"]
+    tc_sim_options = [
+        s for s in df_all["simulation"].unique()
+        if df_all[df_all["simulation"] == s]["tariff_change_applied"].any()
+    ] if "tariff_change_applied" in df_all.columns else []
 
-    if not tc_scenario_names:
-        st.info("No tariff-change scenarios found in the results. "
-                "Add entries to `perturbation_schedule` in `config/simulation.yaml` "
-                "and re-run the simulation.")
-        st.stop()
-
-    selected_scenario = st.selectbox(
-        "Tariff-change scenario",
-        options=tc_scenario_names,
-        key="tc_scenario_select",
-    )
-
-    df_s2 = df_all[df_all["scenario"] == selected_scenario]
-    df_s2 = df_s2[df_s2["strategy"].isin(selected_strategies)]
-
-    # Find the tariff change week from the data
-    change_weeks = df_s2[df_s2["post_tariff_change"]]["week"]
-    tariff_week  = int(change_weeks.min()) if len(change_weeks) else None
-
-    st.header("Tariff change recovery")
-    if tariff_week is not None:
-        st.caption(
-            f"Tariff change injected at **week {tariff_week}**. "
-            "RMSE is measured against the *new* oracle after that point. "
-            "A good strategy recovers quickly without a full restart."
+    if not tc_sim_options:
+        st.info(
+            "No tariff-change simulations found in the results. "
+            "Add entries with `tariff_changes` to `simulations` in "
+            "`config/simulation.yaml` and re-run the simulation."
         )
     else:
-        st.caption("No tariff change detected in the results.")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader(
-            "RMSE recovery",
-            help=(
-                "The holdout is a fixed set of 2,000 real policy rows drawn from the dataset "
-                "before any training begins. These rows are oracle-labeled once and never used "
-                "as anchors or training data during the AL loop. After the tariff change, "
-                "holdout labels are recomputed with the new oracle — so RMSE measures recovery "
-                "of the new tariff, not the old one.\n\n"
-                "Because the holdout is drawn from the real data distribution, it is "
-                "population-representative — a strategy that performs well here has learned "
-                "the new tariff broadly, not just in the repriced segment."
-            ),
+        selected_sim_t2 = st.selectbox(
+            "Simulation",
+            options=tc_sim_options,
+            format_func=sim_display,
+            key="sim_select_t2",
         )
-        fig_tc_rmse = convergence_figure(
-            df_s2, "rmse", "RMSE (€)", selected_strategies,
-            tariff_change_week=tariff_week,
-        )
-        st.plotly_chart(fig_tc_rmse, use_container_width=True)
-
-    with col2:
-        if has_shap(df_s2):
-            st.subheader(
-                "SHAP similarity recovery  ⚗️ simulation only",
-                help=(
-                    "Measures how well the competitor model has recovered the global tariff structure "
-                    "of the oracle — not just accuracy in specific regions, but whether each feature "
-                    "pushes prices in the right direction and with the right relative magnitude. "
-                    "A score of 1 means perfect structural alignment.\n\n"
-                    "Simulation-only metric: computed by comparing the competitor model's SHAP values "
-                    "against the oracle's SHAP values on the holdout set. In a real-world deployment "
-                    "you do not have access to the competitor's internal model, so this metric cannot "
-                    "be observed in practice. It is included here as a diagnostic to reveal how well "
-                    "each strategy recovers the underlying tariff structure, not just prediction accuracy."
-                ),
-            )
-            fig_tc_shap = convergence_figure(
-                df_s2, "shap_cosine_similarity", "Cosine similarity", selected_strategies,
-                tariff_change_week=tariff_week,
-            )
-            st.plotly_chart(fig_tc_shap, use_container_width=True)
-        else:
-            st.info("SHAP similarity was disabled in `config/simulation.yaml` for this run.", icon="ℹ️")
-
-    st.subheader(f"Final-week summary (week {n_weeks})")
-    tbl2 = summary_table(df_s2, selected_strategies)
-    st.dataframe(
-        tbl2.style.format({
-            "Labeled profiles": "{:,.0f}",
-            "RMSE (€)":         "{:.2f}",
-            "Relative RMSE":    "{:.4f}",
-            "SHAP similarity":  "{:.4f}",
-        }),
-        use_container_width=True,
-    )
-
-    # Side-by-side: pre vs post tariff change
-    st.subheader("Pre- vs post-tariff change comparison")
-    pre_week  = (tariff_week - 1) if tariff_week and tariff_week > 0 else 0
-    post_week = n_weeks
-    compare   = (
-        df_s2[
-            df_s2["week"].isin([pre_week, post_week])
-            & df_s2["strategy"].isin(selected_strategies)
+        df_t2 = df_all[
+            (df_all["simulation"] == selected_sim_t2)
+            & df_all["strategy"].isin(selected_strategies)
         ]
-        .copy()
-    )
-    compare["period"] = compare["week"].apply(
-        lambda w: f"Pre-change (wk {pre_week})" if w == pre_week else f"Post-change (wk {post_week})"
-    )
-    pivot = (
-        compare
-        .pivot_table(index="strategy_label", columns="period", values="rmse")
-        .rename_axis("Strategy")
-    )
-    if not pivot.empty:
+        tc_weeks_t2 = tariff_change_weeks(df_t2)
+
+        st.header(sim_display(selected_sim_t2))
+        if tc_weeks_t2:
+            weeks_str = ", ".join(f"**week {w}**" for w in tc_weeks_t2)
+            st.caption(
+                f"Tariff change(s) injected at {weeks_str}. "
+                "RMSE is measured against the *currently active* oracle. "
+                "Dashed lines = restart variants (labeled set cleared at each change)."
+            )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("RMSE recovery")
+            fig_tc_rmse = convergence_figure(
+                df_t2, "rmse", "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t2
+            )
+            st.plotly_chart(fig_tc_rmse, use_container_width=True)
+
+        with col2:
+            if has_shap(df_t2):
+                st.subheader("SHAP similarity recovery  ⚗️ simulation only")
+                fig_tc_shap = convergence_figure(
+                    df_t2, "shap_cosine_similarity", "Cosine similarity",
+                    selected_strategies, change_weeks=tc_weeks_t2,
+                )
+                st.plotly_chart(fig_tc_shap, use_container_width=True)
+            else:
+                st.info(
+                    "SHAP similarity was disabled in `config/simulation.yaml` for this run.",
+                    icon="ℹ️",
+                )
+
+        st.subheader(f"Final-week summary (week {n_weeks})")
+        tbl2 = summary_table(df_t2, selected_strategies)
         st.dataframe(
-            pivot.style.format("{:.2f}"),
+            tbl2.style.format({
+                "Labeled profiles": "{:,.0f}",
+                "RMSE (€)":         "{:.2f}",
+                "Relative RMSE":    "{:.4f}",
+                "SHAP similarity":  "{:.4f}",
+            }),
             use_container_width=True,
         )
+
+        # Pre vs post first tariff change
+        if tc_weeks_t2:
+            first_tc = tc_weeks_t2[0]
+            pre_week  = max(0, first_tc - 1)
+            post_week = n_weeks
+            st.subheader(f"Pre- vs post-change comparison (week {pre_week} → week {post_week})")
+            compare = (
+                df_t2[
+                    df_t2["week"].isin([pre_week, post_week])
+                    & df_t2["strategy"].isin(selected_strategies)
+                ].copy()
+            )
+            compare["period"] = compare["week"].apply(
+                lambda w: f"Pre-change (wk {pre_week})"
+                if w == pre_week else f"Post-change (wk {post_week})"
+            )
+            pivot = (
+                compare
+                .pivot_table(index="strategy_label", columns="period", values="rmse")
+                .rename_axis("Strategy")
+            )
+            if not pivot.empty:
+                st.dataframe(pivot.style.format("{:.2f}"), use_container_width=True)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tab 3: Segment breakdown
 # ──────────────────────────────────────────────────────────────────────────────
 
 with tab3:
-    # Import segment metadata for labels/descriptions
-    import sys
-    from pathlib import Path as _Path
-    sys.path.insert(0, str(_Path(__file__).parent / "src"))
     from market_model_al.segments import SEGMENTS
 
-    seg_cols = [f"rmse_{seg.key}" for seg in SEGMENTS]
-    has_segments = all(c in df_all.columns for c in seg_cols)
+    seg_cols   = [f"rmse_{seg.key}" for seg in SEGMENTS]
+    has_segs   = all(c in df_all.columns for c in seg_cols)
 
-    if not has_segments:
+    if not has_segs:
         st.info(
             "Segment metrics not found in the results file. "
             "Re-run `notebooks/05_al_simulation.py` to generate them."
         )
     else:
-        df_s1_seg = df_all[
-            (df_all["scenario"] == "no_tariff_change")
+        sim_options_t3 = df_all["simulation"].unique().tolist()
+        selected_sim_t3 = st.selectbox(
+            "Simulation",
+            options=sim_options_t3,
+            format_func=sim_display,
+            key="sim_select_t3",
+        )
+        df_t3 = df_all[
+            (df_all["simulation"] == selected_sim_t3)
             & df_all["strategy"].isin(selected_strategies)
         ]
+        tc_weeks_t3 = tariff_change_weeks(df_t3)
 
-        st.header("Per-segment RMSE — no tariff change")
+        st.header(f"Per-segment RMSE — {sim_display(selected_sim_t3)}")
         st.caption(
             "Each panel shows RMSE on the holdout subset for a specific driver/vehicle segment. "
             "A strategy that excels globally but fails in a segment — or vice versa — is visible here."
         )
 
-        # One row of charts per segment
         for seg in SEGMENTS:
             col = f"rmse_{seg.key}"
             st.subheader(f"{seg.label}  —  {seg.description}")
             fig = convergence_figure(
-                df_s1_seg, col, "RMSE (€)", selected_strategies
+                df_t3, col, "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t3
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        # Final-week segment summary table
         st.subheader(f"Final-week segment RMSE (week {n_weeks})")
-        max_week = df_s1_seg["week"].max()
+        max_week  = df_t3["week"].max()
         final_seg = (
-            df_s1_seg[df_s1_seg["week"] == max_week]
+            df_t3[df_t3["week"] == max_week]
             .set_index("strategy_label")[seg_cols]
         )
         final_seg.columns = [seg.label for seg in SEGMENTS]
@@ -476,8 +508,6 @@ with tab4:
         {
             "name": "Random",
             "key": "random",
-            "tag": "Baseline",
-            "tag_color": "#888888",
             "summary": "Selects anchors uniformly at random from the candidate pool each week.",
             "strengths": [
                 "Representative by construction — every region of feature space is sampled in proportion to its true frequency.",
@@ -493,8 +523,6 @@ with tab4:
         {
             "name": "Uncertainty",
             "key": "uncertainty",
-            "tag": "Informativeness",
-            "tag_color": "#1f77b4",
             "summary": "Trains several bootstrap-resampled models and selects anchors where their predictions disagree most (high variance).",
             "detail": (
                 "Bootstrap resampling means fitting the same model type multiple times, each time on a random sample "
@@ -516,8 +544,6 @@ with tab4:
         {
             "name": "Error-based",
             "key": "error_based",
-            "tag": "Informativeness",
-            "tag_color": "#ff7f0e",
             "summary": "Trains a proxy model on labeled relative residuals and selects anchors predicted to have the highest relative error.",
             "strengths": [
                 "Directly targets where the competitor model is currently most wrong.",
@@ -533,17 +559,15 @@ with tab4:
         {
             "name": "Segment-adaptive",
             "key": "segment_adaptive",
-            "tag": "Adaptive",
-            "tag_color": "#9467bd",
-            "summary": "Scores each anchor by the global relative RMSE plus the relative RMSE of every named segment it belongs to. Anchors in high-error segments are prioritised; anchors outside all segments compete on the global baseline.",
+            "summary": "Scores each anchor by the global relative RMSE plus the relative RMSE of every named segment it belongs to.",
             "strengths": [
                 "Dynamic: allocation shifts automatically as segment gaps open and close.",
-                "Uses relative RMSE (RMSE / mean premium) so high-premium segments are not permanently over-sampled.",
+                "Uses relative RMSE so high-premium segments are not permanently over-sampled.",
                 "No starvation: anchors outside named segments always receive the global baseline score.",
                 "Converges toward random as segment gaps close.",
             ],
             "weaknesses": [
-                "Reacts to persistent difficulty, not sudden disruption — segments that are always hard receive extra budget every week, even when nothing has changed.",
+                "Reacts to persistent difficulty, not sudden disruption.",
                 "Segment definitions are fixed; segments not in the list are invisible to the strategy.",
             ],
             "when": "Good all-round strategy when you expect persistent difficulty in specific named segments.",
@@ -551,18 +575,16 @@ with tab4:
         {
             "name": "Disruption-adaptive",
             "key": "disruption",
-            "tag": "Adaptive",
-            "tag_color": "#d62728",
-            "summary": "Monitors the week-on-week *change* in per-segment RMSE. When a segment's RMSE increases by more than 15% relative to the previous week, the full budget is concentrated on random sampling within the disrupted segment(s). Reverts to global random when no disruption is detected.",
+            "summary": "Monitors the week-on-week *change* in per-segment RMSE. Concentrates budget on disrupted segments (≥15% relative RMSE increase); reverts to global random otherwise.",
             "strengths": [
                 "Uses the derivative of RMSE, not its level — fires on disruption, not on permanent difficulty.",
-                "Robust to segments that are always hard (e.g. young drivers): ignores them unless they suddenly worsen.",
-                "Does not discard any labeled data — old labels from unchanged segments remain valid and in the training set.",
-                "Automatically resets after recovery: no manual intervention needed.",
+                "Robust to segments that are always hard: ignores them unless they suddenly worsen.",
+                "Does not discard any labeled data — old labels from unchanged segments remain valid.",
+                "Automatically resets after recovery.",
             ],
             "weaknesses": [
                 "Blind to gradual drift — only reacts to sharp week-on-week spikes.",
-                "The 15% threshold is a fixed hyperparameter; too low triggers false positives, too high misses soft changes.",
+                "The 15% threshold is a fixed hyperparameter.",
                 "Falls back to random on the first week (no prior RMSE to compare against).",
             ],
             "when": "Best response to sudden, localised tariff changes. Outperforms restart strategies because it does not discard valid labels from unchanged segments.",
