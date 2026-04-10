@@ -204,19 +204,26 @@ def segment_adaptive_query(
     from market_model_al.segments import SEGMENTS, segment_rmse
 
     # Estimate per-segment RMSE on the labeled set
-    labeled_preds = competitor.predict(labeled_X)
-    residuals_sq  = (labeled_y - labeled_preds) ** 2
-    global_rmse   = float(np.sqrt(residuals_sq.mean()))
-    seg_rmses     = segment_rmse(labeled_X, labeled_y, labeled_preds)
+    labeled_preds  = competitor.predict(labeled_X)
+    residuals_sq   = (labeled_y - labeled_preds) ** 2
+    global_rmse    = float(np.sqrt(residuals_sq.mean()))
+    global_mean    = float(np.abs(labeled_y).mean()) + 1e-6
+    global_rel     = global_rmse / global_mean
+    seg_rmses      = segment_rmse(labeled_X, labeled_y, labeled_preds)
 
-    # Score each candidate anchor: baseline + cumulative segment RMSE
-    scores = np.full(len(anchor_pool), global_rmse, dtype=float)
+    # Score each candidate anchor: baseline + cumulative per-segment relative RMSE.
+    # Using relative RMSE (RMSE / mean_premium) rather than absolute RMSE avoids
+    # systematically over-sampling segments with inherently high premium levels.
+    scores = np.full(len(anchor_pool), global_rel, dtype=float)
     for seg in SEGMENTS:
         rmse_val = seg_rmses.get(seg.key, float("nan"))
         if np.isnan(rmse_val):
             continue
+        seg_mask   = seg.filter_fn(labeled_X).values
+        seg_mean   = float(np.abs(labeled_y[seg_mask]).mean()) + 1e-6
+        rel_val    = rmse_val / seg_mean
         mask = seg.filter_fn(anchor_pool).values
-        scores[mask] += rmse_val
+        scores[mask] += rel_val
 
     # Small jitter so anchors within the same score bucket are selected randomly
     # rather than by their position in the DataFrame.
@@ -225,6 +232,78 @@ def segment_adaptive_query(
     return np.argsort(-scores)[:n]
 
 
+def disruption_query(
+    competitor,             # CompetitorModel
+    labeled_X: pd.DataFrame,
+    labeled_y: np.ndarray,
+    anchor_pool: pd.DataFrame,
+    n: int,
+    rng: np.random.Generator,
+    prev_seg_rmses: dict[str, float] | None = None,
+    disruption_threshold: float = 0.15,
+) -> np.ndarray:
+    """Select n anchors by detecting and responding to disrupted segments.
+
+    Each week, per-segment RMSE is compared to the previous week.  A segment is
+    flagged as disrupted when its relative RMSE *increase* exceeds
+    disruption_threshold (default 15 %).  When disruption is detected, the
+    entire weekly budget is concentrated on random sampling within the union of
+    all flagged segments.  When no disruption is detected, the strategy falls
+    back to global random sampling.
+
+    This uses the *derivative* of RMSE rather than its absolute level, making it
+    robust to segments that are permanently harder (e.g. young drivers always
+    have a higher absolute RMSE).  It fires exactly when needed and stops once
+    the gap closes — a natural on/off signal rather than a permanent bias.
+
+    Parameters
+    ----------
+    prev_seg_rmses : dict[str, float] | None
+        Per-segment RMSE from the previous week (keys = segment.key).
+        None on the first week — falls back to global random.
+    disruption_threshold : float
+        Relative RMSE increase that triggers disruption mode.
+        E.g. 0.15 means a ≥15 % week-on-week RMSE increase in a segment.
+
+    Falls back to random selection when the labeled set or prev_seg_rmses is
+    unavailable (first week, or immediately after a restart).
+    """
+    from market_model_al.segments import SEGMENTS, segment_rmse
+
+    if len(labeled_X) == 0 or prev_seg_rmses is None:
+        return rng.choice(len(anchor_pool), size=n, replace=False)
+
+    labeled_preds = competitor.predict(labeled_X)
+    curr_seg_rmses = segment_rmse(labeled_X, labeled_y, labeled_preds)
+
+    # Detect disrupted segments: relative RMSE increase > threshold
+    disrupted_masks = []
+    for seg in SEGMENTS:
+        prev = prev_seg_rmses.get(seg.key, float("nan"))
+        curr = curr_seg_rmses.get(seg.key, float("nan"))
+        if np.isnan(prev) or np.isnan(curr) or prev < 1e-6:
+            continue
+        if (curr - prev) / prev > disruption_threshold:
+            disrupted_masks.append(seg.filter_fn(anchor_pool).values)
+
+    if not disrupted_masks:
+        # No disruption detected — global random
+        return rng.choice(len(anchor_pool), size=n, replace=False)
+
+    # Concentrate on the union of all disrupted segments
+    disrupted = np.zeros(len(anchor_pool), dtype=bool)
+    for mask in disrupted_masks:
+        disrupted |= mask
+
+    disrupted_idx = np.where(disrupted)[0]
+    if len(disrupted_idx) < n:
+        # Disrupted segment too small — sample with replacement from it
+        return rng.choice(disrupted_idx, size=n, replace=True)
+
+    return rng.choice(disrupted_idx, size=n, replace=False)
+
+
 # ── registry ──────────────────────────────────────────────────────────────────
 
-STRATEGIES = ["random", "uncertainty", "error_based", "shap_divergence", "segment_adaptive"]
+STRATEGIES = ["random", "uncertainty", "error_based", "shap_divergence",
+              "segment_adaptive", "disruption"]
