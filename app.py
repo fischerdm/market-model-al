@@ -49,6 +49,22 @@ METRIC_OPTIONS = {
     "SHAP cosine similarity": "shap_cosine_similarity",
 }
 
+METRIC_HELP = {
+    "rmse": (
+        "Root mean squared error on the fixed holdout set (2 000 policy rows, "
+        "oracle-labeled once before any training).\n\n"
+        "After a tariff change, holdout labels switch to the new oracle — so RMSE "
+        "measures recovery of the *currently active* tariff."
+    ),
+    "rel_rmse": "RMSE divided by the mean holdout premium — normalises for scale.",
+    "shap_cosine_similarity": (
+        "Mean cosine similarity between oracle and competitor SHAP vectors on the holdout. "
+        "Measures tariff *structure* recovery, not just accuracy.  "
+        "A score of 1 means perfect structural alignment.\n\n"
+        "**Simulation-only:** requires access to the oracle's internal model."
+    ),
+}
+
 # ── Data loading ───────────────────────────────────────────────────────────────
 
 @st.cache_data
@@ -180,12 +196,6 @@ with st.sidebar:
         f"{s}_restart" for s in ["random", "segment_adaptive"] if s in selected_base
     ]
 
-    st.subheader("Primary metric")
-    metric_label = st.radio(
-        "Metric", list(METRIC_OPTIONS.keys()), index=0, label_visibility="collapsed"
-    )
-    metric_col = METRIC_OPTIONS[metric_label]
-
     st.subheader("About")
     n_rows = df_all["n_labeled"].max()
     weekly_added = (
@@ -236,20 +246,19 @@ def sim_display(name: str) -> str:
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Strategy comparison", "Tariff change recovery",
-    "Segment breakdown", "Strategy guide",
+tab1, tab2, tab3 = st.tabs([
+    "Strategy comparison", "Segment breakdown", "Strategy guide",
 ])
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Tab 1: Strategy comparison — user picks any simulation
+# Tab 1: Strategy comparison — all simulations; metric picker drives the chart
 # ──────────────────────────────────────────────────────────────────────────────
 
 with tab1:
-    sim_options_t1 = df_all["simulation"].unique().tolist()
+    all_sims_t1 = df_all["simulation"].unique().tolist()
     selected_sim_t1 = st.selectbox(
         "Simulation",
-        options=sim_options_t1,
+        options=all_sims_t1,
         format_func=sim_display,
         key="sim_select_t1",
     )
@@ -260,61 +269,45 @@ with tab1:
     tc_weeks_t1 = tariff_change_weeks(df_t1)
 
     st.header(sim_display(selected_sim_t1))
-    st.caption(
+
+    caption_parts = [
         "Each week the strategy selects which anchor rows to scrape. "
-        "All ceteris-paribus profiles from the selected anchors are generated and labeled. "
-        "Lower RMSE and higher SHAP similarity = the competitor model recovers the oracle tariff faster."
+        "All ceteris-paribus profiles are generated and oracle-labeled. "
+        "Lower RMSE / higher SHAP similarity = faster recovery of the oracle tariff."
+    ]
+    if tc_weeks_t1:
+        weeks_str = ", ".join(f"**week {w}**" for w in tc_weeks_t1)
+        caption_parts.append(
+            f"Tariff change(s) at {weeks_str} — dashed lines are restart variants."
+        )
+    st.caption("  ".join(caption_parts))
+
+    # ── Metric picker ─────────────────────────────────────────────────────────
+    available_metrics = {
+        k: v for k, v in METRIC_OPTIONS.items()
+        if v != "shap_cosine_similarity" or has_shap(df_t1)
+    }
+    metric_label_t1 = st.radio(
+        "Metric",
+        list(available_metrics.keys()),
+        horizontal=True,
+        key="metric_radio_t1",
     )
+    metric_col_t1 = available_metrics[metric_label_t1]
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader(
-            "RMSE on holdout (€)",
-            help=(
-                "The holdout is a fixed set of 2,000 real policy rows drawn from the dataset "
-                "before any training begins. These rows are oracle-labeled once and never used "
-                "as anchors or training data during the AL loop. RMSE is computed on this set "
-                "each week, so it is comparable across strategies and weeks.\n\n"
-                "After a tariff change, holdout labels switch to the new oracle — so RMSE "
-                "measures recovery of the currently active tariff."
-            ),
+    if metric_col_t1 == "shap_cosine_similarity":
+        st.caption(
+            "⚗️ **Simulation-only metric** — requires access to the oracle's internal model "
+            "and cannot be observed in real-world deployment."
         )
-        fig_rmse = convergence_figure(
-            df_t1, "rmse", "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t1
-        )
-        st.plotly_chart(fig_rmse, use_container_width=True)
 
-    with col2:
-        if has_shap(df_t1):
-            st.subheader(
-                "SHAP cosine similarity  ⚗️ simulation only",
-                help=(
-                    "Measures how well the competitor model has recovered the global tariff "
-                    "structure of the oracle — not just accuracy in specific regions, but whether "
-                    "each feature pushes prices in the right direction and with the right relative "
-                    "magnitude.  A score of 1 means perfect structural alignment.\n\n"
-                    "Simulation-only metric: requires access to the oracle's internal model."
-                ),
-            )
-            fig_shap = convergence_figure(
-                df_t1, "shap_cosine_similarity", "Cosine similarity",
-                selected_strategies, change_weeks=tc_weeks_t1,
-            )
-            st.plotly_chart(fig_shap, use_container_width=True)
-        else:
-            st.info(
-                "SHAP similarity was disabled in `config/simulation.yaml` for this run.",
-                icon="ℹ️",
-            )
+    fig_t1 = convergence_figure(
+        df_t1, metric_col_t1, metric_label_t1,
+        selected_strategies, change_weeks=tc_weeks_t1,
+    )
+    st.plotly_chart(fig_t1, use_container_width=True)
 
-    if metric_col == "rel_rmse":
-        st.subheader("Relative RMSE")
-        fig_rel = convergence_figure(
-            df_t1, "rel_rmse", "Relative RMSE", selected_strategies, change_weeks=tc_weeks_t1
-        )
-        st.plotly_chart(fig_rel, use_container_width=True)
-
+    # ── Summary table ─────────────────────────────────────────────────────────
     st.subheader(f"Final-week summary (week {n_weeks})")
     tbl = summary_table(df_t1, selected_strategies)
     st.dataframe(
@@ -327,108 +320,35 @@ with tab1:
         use_container_width=True,
     )
 
+    # ── Pre vs post tariff change (only when relevant) ────────────────────────
+    if tc_weeks_t1:
+        first_tc  = tc_weeks_t1[0]
+        pre_week  = max(0, first_tc - 1)
+        post_week = n_weeks
+        st.subheader(f"Pre- vs post-change RMSE (week {pre_week} → week {post_week})")
+        compare = (
+            df_t1[
+                df_t1["week"].isin([pre_week, post_week])
+                & df_t1["strategy"].isin(selected_strategies)
+            ].copy()
+        )
+        compare["period"] = compare["week"].apply(
+            lambda w: f"Pre-change (wk {pre_week})"
+            if w == pre_week else f"Post-change (wk {post_week})"
+        )
+        pivot = (
+            compare
+            .pivot_table(index="strategy_label", columns="period", values="rmse")
+            .rename_axis("Strategy")
+        )
+        if not pivot.empty:
+            st.dataframe(pivot.style.format("{:.2f}"), use_container_width=True)
+
 # ──────────────────────────────────────────────────────────────────────────────
-# Tab 2: Tariff change recovery — only simulations that have changes
+# Tab 2: Segment breakdown
 # ──────────────────────────────────────────────────────────────────────────────
 
 with tab2:
-    tc_sim_options = [
-        s for s in df_all["simulation"].unique()
-        if df_all[df_all["simulation"] == s]["tariff_change_applied"].any()
-    ] if "tariff_change_applied" in df_all.columns else []
-
-    if not tc_sim_options:
-        st.info(
-            "No tariff-change simulations found in the results. "
-            "Add entries with `tariff_changes` to `simulations` in "
-            "`config/simulation.yaml` and re-run the simulation."
-        )
-    else:
-        selected_sim_t2 = st.selectbox(
-            "Simulation",
-            options=tc_sim_options,
-            format_func=sim_display,
-            key="sim_select_t2",
-        )
-        df_t2 = df_all[
-            (df_all["simulation"] == selected_sim_t2)
-            & df_all["strategy"].isin(selected_strategies)
-        ]
-        tc_weeks_t2 = tariff_change_weeks(df_t2)
-
-        st.header(sim_display(selected_sim_t2))
-        if tc_weeks_t2:
-            weeks_str = ", ".join(f"**week {w}**" for w in tc_weeks_t2)
-            st.caption(
-                f"Tariff change(s) injected at {weeks_str}. "
-                "RMSE is measured against the *currently active* oracle. "
-                "Dashed lines = restart variants (labeled set cleared at each change)."
-            )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("RMSE recovery")
-            fig_tc_rmse = convergence_figure(
-                df_t2, "rmse", "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t2
-            )
-            st.plotly_chart(fig_tc_rmse, use_container_width=True)
-
-        with col2:
-            if has_shap(df_t2):
-                st.subheader("SHAP similarity recovery  ⚗️ simulation only")
-                fig_tc_shap = convergence_figure(
-                    df_t2, "shap_cosine_similarity", "Cosine similarity",
-                    selected_strategies, change_weeks=tc_weeks_t2,
-                )
-                st.plotly_chart(fig_tc_shap, use_container_width=True)
-            else:
-                st.info(
-                    "SHAP similarity was disabled in `config/simulation.yaml` for this run.",
-                    icon="ℹ️",
-                )
-
-        st.subheader(f"Final-week summary (week {n_weeks})")
-        tbl2 = summary_table(df_t2, selected_strategies)
-        st.dataframe(
-            tbl2.style.format({
-                "Labeled profiles": "{:,.0f}",
-                "RMSE (€)":         "{:.2f}",
-                "Relative RMSE":    "{:.4f}",
-                "SHAP similarity":  "{:.4f}",
-            }),
-            use_container_width=True,
-        )
-
-        # Pre vs post first tariff change
-        if tc_weeks_t2:
-            first_tc = tc_weeks_t2[0]
-            pre_week  = max(0, first_tc - 1)
-            post_week = n_weeks
-            st.subheader(f"Pre- vs post-change comparison (week {pre_week} → week {post_week})")
-            compare = (
-                df_t2[
-                    df_t2["week"].isin([pre_week, post_week])
-                    & df_t2["strategy"].isin(selected_strategies)
-                ].copy()
-            )
-            compare["period"] = compare["week"].apply(
-                lambda w: f"Pre-change (wk {pre_week})"
-                if w == pre_week else f"Post-change (wk {post_week})"
-            )
-            pivot = (
-                compare
-                .pivot_table(index="strategy_label", columns="period", values="rmse")
-                .rename_axis("Strategy")
-            )
-            if not pivot.empty:
-                st.dataframe(pivot.style.format("{:.2f}"), use_container_width=True)
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Tab 3: Segment breakdown
-# ──────────────────────────────────────────────────────────────────────────────
-
-with tab3:
     from market_model_al.segments import SEGMENTS
 
     seg_cols   = [f"rmse_{seg.key}" for seg in SEGMENTS]
@@ -440,20 +360,20 @@ with tab3:
             "Re-run `notebooks/05_al_simulation.py` to generate them."
         )
     else:
-        sim_options_t3 = df_all["simulation"].unique().tolist()
-        selected_sim_t3 = st.selectbox(
+        sim_options_t2 = df_all["simulation"].unique().tolist()
+        selected_sim_t2 = st.selectbox(
             "Simulation",
-            options=sim_options_t3,
+            options=sim_options_t2,
             format_func=sim_display,
-            key="sim_select_t3",
+            key="sim_select_t2",
         )
-        df_t3 = df_all[
-            (df_all["simulation"] == selected_sim_t3)
+        df_t2 = df_all[
+            (df_all["simulation"] == selected_sim_t2)
             & df_all["strategy"].isin(selected_strategies)
         ]
-        tc_weeks_t3 = tariff_change_weeks(df_t3)
+        tc_weeks_t2 = tariff_change_weeks(df_t2)
 
-        st.header(f"Per-segment RMSE — {sim_display(selected_sim_t3)}")
+        st.header(f"Per-segment RMSE — {sim_display(selected_sim_t2)}")
         st.caption(
             "Each panel shows RMSE on the holdout subset for a specific driver/vehicle segment. "
             "A strategy that excels globally but fails in a segment — or vice versa — is visible here."
@@ -463,14 +383,14 @@ with tab3:
             col = f"rmse_{seg.key}"
             st.subheader(f"{seg.label}  —  {seg.description}")
             fig = convergence_figure(
-                df_t3, col, "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t3
+                df_t2, col, "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t2
             )
             st.plotly_chart(fig, use_container_width=True)
 
         st.subheader(f"Final-week segment RMSE (week {n_weeks})")
-        max_week  = df_t3["week"].max()
+        max_week  = df_t2["week"].max()
         final_seg = (
-            df_t3[df_t3["week"] == max_week]
+            df_t2[df_t2["week"] == max_week]
             .set_index("strategy_label")[seg_cols]
         )
         final_seg.columns = [seg.label for seg in SEGMENTS]
@@ -481,10 +401,10 @@ with tab3:
         )
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Tab 4: Strategy guide
+# Tab 3: Strategy guide
 # ──────────────────────────────────────────────────────────────────────────────
 
-with tab4:
+with tab3:
     st.header("Strategy guide")
     st.caption(
         "How each strategy selects which anchor rows to scrape each week. "
