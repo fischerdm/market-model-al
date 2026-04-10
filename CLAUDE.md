@@ -49,10 +49,16 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    **Removed strategy**: `shap_divergence` required oracle SHAP values to score candidates — not available in real-world deployment. Removed from the simulation.
 
    **Tariff change simulation** (`PerturbedOracleEngine` in `perturbed_oracle.py`):
-   - A perturbed oracle applies a systematic premium shift (e.g. young-driver surcharge +20%, uniform reprice, area repricing)
-   - Injected mid-run at `tariff_change_week`; holdout labels switch to the new oracle so RMSE measures recovery of the new tariff
-   - `restart_at_tariff_change=True` clears the labeled set after the tariff-change week's evaluation; model re-learns from new-oracle labels only
-   - Restart variants run for `random` and `segment_adaptive` in scenario 2
+   - A perturbed oracle applies a systematic premium shift (e.g. young-driver surcharge +20%, uniform reprice, area repricing, compose for stacked shocks)
+   - Each named **simulation** defines its own `tariff_changes` timeline — a sorted list of `(week, perturbed_oracle)` pairs applied within one continuous run; the competitor model experiences all shocks in a single timeline
+   - Multiple oracle switches in one run are supported; holdout labels switch at each change so RMSE always measures recovery of the *currently active* tariff
+   - `restart_at_tariff_change=True` clears the labeled set after **every** tariff-change week's evaluation (not just the first); model re-learns from scratch from new-oracle labels only
+
+   **Configuration system** (`config/`):
+   - `config/simulation.yaml` — global params (n_weeks, weekly_budget, seed, strategies, metrics, restart_strategies) and a `simulations` list; each simulation entry has a name, label, and its own `tariff_changes` schedule
+   - `config/tariff_changes.yaml` — named perturbation library; definitions only, no timing; referenced by name from the simulation schedule; supports `young_driver_surcharge`, `high_value_surcharge`, `uniform_reprice`, `area_reprice`; composed shocks are built from lists of names in one schedule entry
+   - `src/market_model_al/config.py` — loader (`load_simulation_cfg`, `load_tariff_changes_cfg`), resolver (`resolve_simulations`), and perturbation factory (`build_perturbation_fn`, `build_perturbed_oracle`)
+   - `shap_cosine_similarity` metric is optional; disabling it skips oracle SHAP precomputation at startup (~10 s); `al_loop.py` writes `float("nan")` in that column and the dashboard hides the SHAP panels
 
    **Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own? A good strategy should converge on varying one factor at a time across its range — this is the structure of a competitor tariff that scraping is trying to reveal.
 
@@ -72,4 +78,4 @@ Used in two places:
 - On the **competitor model** — track recovery of the oracle's SHAP structure across AL weeks (simulation diagnostic only; not observable in practice)
 
 ## Stack
-Python 3.12, LightGBM, SHAP, Streamlit. All notebooks are `.py` files (numbered), not `.ipynb`. Virtual environment is `.venv` (not conda).
+Python 3.12, LightGBM, SHAP, Streamlit, PyYAML. All notebooks are `.py` files (numbered), not `.ipynb`. Virtual environment is `.venv` (not conda).
