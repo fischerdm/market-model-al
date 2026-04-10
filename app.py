@@ -28,6 +28,7 @@ STRATEGY_LABELS = {
     "error_based":                "Error-based",
     "shap_divergence":            "SHAP divergence",
     "segment_adaptive":           "Segment-adaptive",
+    "disruption":                 "Disruption-adaptive",
     "random_restart":             "Random (restart)",
     "segment_adaptive_restart":   "Segment-adaptive (restart)",
 }
@@ -38,6 +39,7 @@ PALETTE = {
     "error_based":                "#ff7f0e",
     "shap_divergence":            "#2ca02c",
     "segment_adaptive":           "#9467bd",
+    "disruption":                 "#d62728",
     "random_restart":             "#888888",
     "segment_adaptive_restart":   "#9467bd",
 }
