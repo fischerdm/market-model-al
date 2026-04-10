@@ -368,18 +368,16 @@
 
     <h3>Phase 2 — Active learning loop</h3>
     <p>
-      The competitor model is seeded with a <strong>warm start</strong> combining two
-      components: (A) a random sample of real policy rows — simulating organic quote
-      requests arriving via comparis — and (B) structured ceteris-paribus profiles from
-      a small set of anchor rows, simulating an initial systematic scrape. The warm-start
-      mix ratio is a configurable experiment parameter.
+      The competitor model is seeded with a <strong>warm start</strong> of ~5,000 real policy
+      rows (approximately one week's scraping budget), simulating organic quote requests
+      arriving via the aggregator before the systematic AL loop begins.
     </p>
     <p>
       The loop then runs <strong>weekly</strong>: each week, fresh anchor rows are sampled
       from the real dataset, ceteris-paribus candidate profiles are generated on the fly,
-      and the query strategy selects <code>profiles_per_week</code> candidates to scrape.
-      The oracle labels only the selected profiles — the rest are discarded. The competitor
-      model is retrained after each week's batch.
+      and the query strategy selects which anchors to scrape.
+      All CP profiles from selected anchors are labeled by the oracle and added to the
+      training set. The competitor model is retrained after each week's batch.
     </p>
 
     <div class="table-wrap">
@@ -389,18 +387,22 @@
         </thead>
         <tbody>
           <tr><td>Random</td><td>Uniform random baseline — no model required</td></tr>
-          <tr><td>Uncertainty sampling</td><td>Profiles with highest bootstrap prediction variance across ensemble members</td></tr>
-          <tr><td>Error-based</td><td>Profiles with highest expected absolute error, estimated by a proxy model trained on labeled residuals</td></tr>
-          <tr><td>SHAP divergence</td><td>Profiles where the L2 distance between oracle and competitor SHAP vectors is largest</td></tr>
+          <tr><td>Uncertainty</td><td>Anchors with highest bootstrap prediction variance across ensemble members</td></tr>
+          <tr><td>Error-based</td><td>Anchors with highest expected relative error, estimated by a proxy model trained on labeled residuals</td></tr>
+          <tr><td>Segment-adaptive</td><td>Anchors scored by global + per-segment relative RMSE on the labeled set; converges toward random as segment gaps close</td></tr>
+          <tr><td>Disruption-adaptive</td><td>Concentrates budget on segments with a sharp week-on-week RMSE increase; reverts to global random when no disruption is detected</td></tr>
         </tbody>
       </table>
     </div>
 
     <p>
-      Convergence is tracked in two complementary metrics: RMSE against the oracle,
-      and mean SHAP cosine similarity on a fixed holdout — a richer signal that captures
-      whether the competitor model has learned the same tariff <em>factors</em>, not just
-      the same premium levels.
+      Convergence is tracked in two complementary metrics. <strong>RMSE on holdout</strong> —
+      a fixed set of 2,000 real rows, oracle-labeled, never used during training — measures
+      prediction accuracy on a population-representative sample. <strong>SHAP cosine
+      similarity</strong> is a simulation-only diagnostic that compares the competitor
+      model's SHAP vectors to the oracle's, capturing whether the tariff <em>structure</em>
+      has been recovered, not just the premium levels. This metric requires oracle access
+      and cannot be observed in real-world deployment.
     </p>
 
     <h3>Tariff change simulation</h3>
@@ -480,7 +482,7 @@
     <h2>Active learning results</h2>
 
     <p>
-      Simulation run: <strong>10 weeks · 5 000 profiles/week · 4 strategies</strong>.
+      Simulation run: <strong>10 weeks · 5 000 profiles/week · 5 strategies</strong>.
       Strategies operate on <em>anchor selection</em>: each week a pool of real data rows
       is scored, the best anchors are selected, and all their ceteris-paribus profiles are
       generated and labeled. Budget converts to anchors as
@@ -491,31 +493,9 @@
 
     <div class="callout warn">
       <strong>Random anchor sampling is competitive.</strong> On a population-representative
-      holdout, uniform random anchor selection matches or outperforms all three
-      informativeness-based strategies across 10 weeks on both RMSE and SHAP cosine similarity.
+      holdout, uniform random anchor selection matches or outperforms all informativeness-based
+      strategies across 10 weeks on both RMSE and SHAP cosine similarity.
     </div>
-
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>Strategy</th><th>Global RMSE</th><th>Young drivers</th><th>High-value cars</th><th>Senior drivers</th></tr>
-        </thead>
-        <tbody>
-          <tr><td class="hl">Random</td><td class="num good">best</td><td class="num">2nd</td><td class="num good">best</td><td class="num good">best</td></tr>
-          <tr><td>Error-based</td><td class="num">2nd</td><td class="num good">best</td><td class="num">3rd</td><td class="num">3rd</td></tr>
-          <tr><td>Uncertainty</td><td class="num">3rd</td><td class="num">3rd</td><td class="num">2nd</td><td class="num">2nd</td></tr>
-          <tr><td class="warn">SHAP divergence</td><td class="num warn">worst</td><td class="num warn">worst</td><td class="num warn">worst</td><td class="num warn">worst</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <h3>Why sophisticated strategies underperform</h3>
-    <p>
-      Greedy informativeness strategies concentrate scraping budget on high-signal edge
-      cases — young drivers, high-powered vehicles, extreme vehicle values — at the expense
-      of mainstream segments. Random sampling, by contrast, draws anchors proportional to
-      the real data distribution, which naturally matches a population-representative holdout.
-    </p>
 
     <div class="callout insight">
       <strong>Error-based wins on young drivers.</strong> This is the one segment where
@@ -524,21 +504,29 @@
       pricing is one of the most sensitive and frequently debated segments in motor insurance.
     </div>
 
-    <div class="callout warn">
-      <strong>SHAP divergence: distribution mismatch.</strong> By prioritising anchors where
-      oracle and competitor SHAP vectors diverge most, the strategy over-samples rare,
-      extreme profiles. The competitor model learns those regions well but degrades on
-      mainstream segments. SHAP cosine similarity on the holdout bottoms out around week 8.
-    </div>
-
-    <h3>Implication: segment-adaptive scraping</h3>
+    <h3>Why sophisticated strategies underperform globally</h3>
     <p>
-      The findings motivate an explicit segment-allocation strategy: distribute the weekly
-      scraping budget proportionally to per-segment RMSE (worse segments get more anchors),
-      then apply informativeness scoring <em>within</em> each segment's allocation. This
-      preserves representativeness while still prioritising informative regions — and matches
-      how a practitioner would reason in the real world.
+      Greedy informativeness strategies concentrate scraping budget on high-signal edge
+      cases — young drivers, high-powered vehicles, extreme vehicle values — at the expense
+      of mainstream segments. Random sampling, by contrast, draws anchors proportional to
+      the real data distribution, which naturally matches a population-representative holdout.
     </p>
+
+    <h3>Tariff change: restart is not always optimal</h3>
+    <p>
+      After a targeted tariff change (e.g. young-driver surcharge +20%), a full restart
+      discards all accumulated labels — including valid ones from unchanged segments. The
+      continuous scraping strategy retains those labels and can achieve lower global RMSE
+      at week 10 than a restart strategy, even though its labels are partially stale.
+    </p>
+
+    <div class="callout insight">
+      <strong>Disruption-adaptive: the principled alternative.</strong> Rather than
+      discarding labels, the disruption strategy detects which segments spiked in RMSE
+      week-on-week and concentrates that week's budget there. It fires exactly when needed,
+      reverts to global random once the gap closes, and never discards valid labeled data
+      from unchanged segments.
+    </div>
   </section>
 
   <!-- ── REPO ── -->

@@ -9,7 +9,7 @@ Prerequisites
 
 Scenarios
 ---------
-  1. All four strategies, no tariff change  — baseline strategy comparison
+  1. All five strategies, no tariff change  — baseline strategy comparison
   2. Young-driver surcharge at week 26      — tariff change recovery
      Per strategy: one "continue" run (no restart) so practitioners can see
      how each strategy handles drift.
@@ -53,10 +53,11 @@ TARIFF_CHANGE_WEEK = 3
 SEED               = 42
 
 PALETTE = {
-    "random":          "#888888",
-    "uncertainty":     "#1f77b4",
-    "error_based":     "#ff7f0e",
-    "shap_divergence": "#2ca02c",
+    "random":            "#888888",
+    "uncertainty":       "#1f77b4",
+    "error_based":       "#ff7f0e",
+    "shap_divergence":   "#2ca02c",
+    "segment_adaptive":  "#9467bd",
 }
 
 # ── Load warm start ────────────────────────────────────────────────────────────
@@ -124,6 +125,23 @@ for strategy in STRATEGIES:
         tariff_change_week=TARIFF_CHANGE_WEEK,
         perturbed_oracle=perturbed,
     )
+    df_run["scenario"] = "tariff_change"
+    results_s2.append(df_run)
+
+for strategy in ["random", "segment_adaptive"]:
+    print(f"\n--- {strategy}_restart + tariff change ---")
+    df_run = sim.run(
+        strategy=strategy,
+        warm_start_X=warm_start_X,
+        warm_start_y=warm_start_y,
+        weekly_budget=WEEKLY_BUDGET,
+        candidate_multiplier=CANDIDATE_MULT,
+        n_weeks=N_WEEKS,
+        tariff_change_week=TARIFF_CHANGE_WEEK,
+        perturbed_oracle=perturbed,
+        restart_at_tariff_change=True,
+    )
+    df_run["strategy"] = f"{strategy}_restart"
     df_run["scenario"] = "tariff_change"
     results_s2.append(df_run)
 

@@ -20,20 +20,21 @@ The end deliverable is a **Streamlit dashboard** for interactively exploring and
 
 Candidate profiles are generated ad hoc each week via a ceteris-paribus approach: real rows serve as anchor points and continuous features are swept one at a time across their range (e.g. `driver_age` 18→80, all other features held fixed). This mirrors how scraping is done in practice.
 
-**Warm start** seeds the competitor model with two components:
-- **(A) Real rows** — a random sample from the Spanish dataset, simulating organic quote requests arriving via comparis
-- **(B) CP profiles** — structured ceteris-paribus sweeps from a small set of anchors, simulating an initial systematic scrape
+**Warm start** seeds the competitor model with ~5,000 real rows (≈ one week's scraping budget), simulating organic quote requests arriving via the aggregator before the systematic AL loop begins.
 
-The **weekly AL loop** then generates fresh CP candidate profiles each week and uses a query strategy to select which ones to actually scrape (label via the oracle) before retraining the competitor model.
+The **weekly AL loop** generates fresh CP candidate profiles each week and uses a query strategy to select which anchors to scrape (label via the oracle) before retraining the competitor model.
 
-| AL strategy | Query criterion |
-|---|---|
-| Random | Uniform random baseline |
-| Uncertainty sampling | Profiles where bootstrap prediction variance is highest |
-| Error-based | Profiles where expected absolute residual is highest (proxy model) |
-| SHAP divergence | Profiles where oracle and competitor SHAP vectors diverge most |
+| AL strategy | Query criterion | Deployable in practice? |
+|---|---|---|
+| Random | Uniform random baseline — no model required | Yes |
+| Uncertainty | Anchors where bootstrap prediction variance is highest | Yes |
+| Error-based | Anchors with highest expected relative residual (proxy model on labeled data) | Yes |
+| Segment-adaptive | Anchors scored by global + per-segment relative RMSE; converges toward random as gaps close | Yes |
+| Disruption-adaptive | Concentrates budget on segments with a sharp week-on-week RMSE spike; falls back to random otherwise | Yes |
 
-Convergence is tracked in two metrics: RMSE against the oracle, and SHAP cosine similarity — capturing whether the competitor model has learned the same tariff *factors*, not just the same premium levels.
+Convergence is tracked in two metrics:
+- **RMSE on holdout** — a fixed set of 2,000 real rows, oracle-labeled, never used during training. Measures prediction accuracy on a population-representative sample.
+- **SHAP cosine similarity** *(simulation-only diagnostic)* — compares the competitor model's SHAP vectors to the oracle's on the holdout. Captures whether the tariff *structure* has been recovered, not just the premium levels. Requires oracle access, so it cannot be observed in real-world deployment.
 
 **Tariff change simulation**: a `PerturbedOracleEngine` can be injected mid-run at a configurable week to simulate a competitor repricing event (e.g. young-driver surcharge +20%). This lets practitioners compare *continue* vs *restart* strategies and assess whether the weekly continuous scraping rate is sufficient to track the new tariff.
 
@@ -41,15 +42,15 @@ Convergence is tracked in two metrics: RMSE against the oracle, and SHAP cosine 
 
 ## Simulation findings (10-week run, 5 000 profiles/week)
 
-The strategies now operate on **anchor selection**: each week a candidate pool of real anchor rows is scored, the best anchors are selected, and all their ceteris-paribus profiles are generated and labeled. The weekly profile count is derived from the budget: `n_anchors = weekly_budget // 254`.
+Strategies operate on **anchor selection**: each week a pool of real anchor rows is scored, the best anchors are selected, and all their ceteris-paribus profiles are generated and labeled. The weekly profile count is derived from the budget: `n_anchors = weekly_budget // 254`.
 
 | Finding | Detail |
 |---|---|
-| **Random beats sophisticated strategies globally** | On a population-representative holdout, random anchor sampling is competitive with or better than all three informativeness-based strategies at 10 weeks. |
-| **Error-based recovers young drivers faster** | Segment-level RMSE reveals that `error_based` converges faster than random on young drivers (age < 30) — the only segment where a sophisticated strategy wins. |
-| **SHAP divergence concentrates on edge cases** | By prioritising anchors with the largest oracle–competitor SHAP gap, `shap_divergence` over-samples rare, extreme profiles. SHAP cosine similarity bottoms out around week 8, reflecting distribution mismatch between scraped profiles and the population holdout. |
-| **Root cause: informativeness vs. representativeness** | Greedy informativeness strategies pull budget toward high-signal edge cases (young drivers, expensive cars, high power), starving mainstream segments that random covers proportionally. |
-| **Implication** | A single global greedy strategy is the wrong design. Explicit budget allocation across segments — applying informativeness scoring *within* each segment — is the natural next step (`segment_adaptive` strategy, in progress). |
+| **Random beats sophisticated strategies globally** | On a population-representative holdout, random anchor sampling is competitive with or better than all informativeness-based strategies at 10 weeks. |
+| **Error-based recovers young drivers faster** | Segment-level RMSE reveals that `error_based` converges faster than random on young drivers (age < 30) — the one segment where a sophisticated strategy wins. |
+| **Root cause: informativeness vs. representativeness** | Greedy informativeness strategies pull budget toward high-signal edge cases, starving mainstream segments that random covers proportionally. |
+| **Restart is not always optimal** | After a targeted tariff change (young-driver surcharge), a full restart discards valid labels from unchanged segments. The continuous strategy retains that data and can outperform restart on global RMSE. |
+| **Disruption-adaptive** | Uses the week-on-week *change* in segment RMSE as a signal, not the absolute level. Fires on disruption, ignores permanently hard segments, and reverts to random once the gap closes. No labels are discarded. |
 
 ## Project structure
 
@@ -64,7 +65,7 @@ market-model-al/
 │   ├── 01_oracle.py                    # fit and validate the oracle
 │   ├── 02_oracle_engine_smoke.py       # smoke test: OraclePricingEngine
 │   ├── 03_profile_generator_smoke.py   # smoke test: ceteris-paribus generator
-│   ├── 04_build_warm_start.py          # build warm start dataset (real + CP mix)
+│   ├── 04_build_warm_start.py          # build warm start dataset (~5k real rows)
 │   └── 05_al_simulation.py             # run AL strategies, save results + figures
 ├── src/
 │   └── market_model_al/
@@ -73,14 +74,16 @@ market-model-al/
 │       ├── oracle_engine.py      # OraclePricingEngine: query(profiles) → prices
 │       ├── profile_generator.py  # ceteris-paribus candidate generation (ad hoc)
 │       ├── competitor_model.py   # CompetitorModel: LightGBM, retrained each iteration
-│       ├── strategies.py         # AL query strategies (random, uncertainty, error_based, shap_divergence)
-│       ├── al_loop.py            # ALSimulation: weekly loop, tariff change support
+│       ├── strategies.py         # AL query strategies
+│       ├── segments.py           # four actuarial segments + segment_rmse()
+│       ├── al_loop.py            # ALSimulation: weekly loop, tariff change + restart support
 │       └── perturbed_oracle.py   # PerturbedOracleEngine + preset perturbation functions
 ├── outputs/
 │   ├── figures/            # saved plots (not committed)
 │   ├── models/             # oracle.pkl (not committed)
 │   ├── warm_start/         # warm_start_X.parquet, warm_start_y.npy (not committed)
 │   └── al_results/         # results.parquet (not committed)
+├── app.py                  # Streamlit dashboard (4 tabs)
 └── pyproject.toml
 ```
 
@@ -111,6 +114,9 @@ pip install -e ".[dev]"
 # Phase 2 — build warm start, then run AL simulation
 .venv/bin/python notebooks/04_build_warm_start.py
 .venv/bin/python notebooks/05_al_simulation.py
+
+# Dashboard
+streamlit run app.py
 ```
 
 ## Data

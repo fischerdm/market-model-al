@@ -63,7 +63,8 @@ from market_model_al.strategies import (
     random_query,
     uncertainty_query,
     error_based_query,
-    shap_divergence_query,
+    segment_adaptive_query,
+    disruption_query,
 )
 
 
@@ -141,6 +142,7 @@ class ALSimulation:
         candidate_multiplier: int = 10,
         tariff_change_week: int | None = None,
         perturbed_oracle=None,
+        restart_at_tariff_change: bool = False,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -167,6 +169,11 @@ class ALSimulation:
             Holdout labels are re-computed with the new oracle at that point.
         perturbed_oracle : PerturbedOracleEngine, optional
             Required when tariff_change_week is set.
+        restart_at_tariff_change : bool
+            If True, the entire labeled set (including warm start) is discarded
+            at tariff_change_week after that week's evaluation.  The model
+            re-learns exclusively from profiles labeled by the new oracle.
+            The RMSE spike at tariff_change_week is still recorded honestly.
 
         Returns
         -------
@@ -196,6 +203,7 @@ class ALSimulation:
 
         records = []
         competitor = CompetitorModel(params=self._competitor_params)
+        prev_seg_rmses: dict[str, float] | None = None   # for disruption_query
 
         print(f"Strategy : {strategy}")
         print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
@@ -248,6 +256,17 @@ class ALSimulation:
             if week == n_weeks:
                 break
 
+            # ── Carry segment RMSEs forward for disruption detection ──────────
+            prev_seg_rmses = seg_rmse
+
+            # ── Restart: discard all stale labels after tariff-change evaluation ─
+            if restart_at_tariff_change and post_change and week == tariff_change_week:
+                labeled_X = labeled_X.iloc[:0].copy()
+                labeled_y = np.array([], dtype=float)
+                prev_seg_rmses = None   # reset state so disruption fires cleanly next week
+                print(f"  [week {week}] Restart — labeled set cleared, "
+                      "re-learning from new oracle only.", flush=True)
+
             # ── Sample candidate anchor pool ──────────────────────────────────
             cand_idx = rng.choice(self._anchor_pool_idx, size=n_candidates, replace=False)
             candidate_anchors = self._real_X.iloc[cand_idx].reset_index(drop=True)
@@ -256,6 +275,7 @@ class ALSimulation:
             chosen_local = self._apply_strategy(
                 strategy, competitor, labeled_X, labeled_y,
                 candidate_anchors, n_anchors, rng,
+                prev_seg_rmses=prev_seg_rmses,
             )
             selected_anchors = candidate_anchors.iloc[chosen_local]
 
@@ -284,6 +304,7 @@ class ALSimulation:
         candidate_anchors: pd.DataFrame,
         n: int,
         rng: np.random.Generator,
+        prev_seg_rmses: dict | None = None,
     ) -> np.ndarray:
         if strategy == "random":
             return random_query(candidate_anchors, n, rng)
@@ -291,9 +312,14 @@ class ALSimulation:
             return uncertainty_query(competitor, labeled_X, labeled_y, candidate_anchors, n, rng)
         elif strategy == "error_based":
             return error_based_query(competitor, labeled_X, labeled_y, candidate_anchors, n, rng)
-        elif strategy == "shap_divergence":
-            return shap_divergence_query(
-                self._oracle_explainer, competitor, candidate_anchors, n, rng
+        elif strategy == "segment_adaptive":
+            return segment_adaptive_query(
+                competitor, labeled_X, labeled_y, candidate_anchors, n, rng
+            )
+        elif strategy == "disruption":
+            return disruption_query(
+                competitor, labeled_X, labeled_y, candidate_anchors, n, rng,
+                prev_seg_rmses=prev_seg_rmses,
             )
 
     def _shap_similarity(self, competitor: CompetitorModel) -> float:
