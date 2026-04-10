@@ -133,11 +133,13 @@ def error_based_query(
     n: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Select n anchors with the highest expected absolute prediction error.
+    """Select n anchors with the highest expected relative prediction error.
 
-    A proxy LightGBM model is trained on (labeled_X, |residuals|) and used to
-    predict the expected error magnitude at each candidate anchor.  Anchors
-    where the competitor model is likely most wrong are prioritised.
+    A proxy LightGBM model is trained on (labeled_X, |residuals| / label) and
+    used to predict the expected relative error magnitude at each candidate
+    anchor.  Using relative rather than absolute residuals avoids systematically
+    over-sampling high-premium policies whose absolute errors are large purely
+    due to their premium level.
 
     Falls back to random selection when the labeled set is empty (e.g.
     immediately after a restart).
@@ -145,7 +147,8 @@ def error_based_query(
     if len(labeled_X) == 0:
         return rng.choice(len(anchor_pool), size=n, replace=False)
 
-    residuals = np.abs(labeled_y - competitor.predict(labeled_X))
+    abs_residuals = np.abs(labeled_y - competitor.predict(labeled_X))
+    residuals = abs_residuals / (np.abs(labeled_y) + 1e-6)
     proxy = _train_quick_lgb(labeled_X, residuals, rng)
     scores = proxy.predict(_encode_categoricals(anchor_pool))
     return np.argsort(-scores)[:n]
