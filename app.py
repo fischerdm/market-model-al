@@ -211,7 +211,18 @@ with tab1:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("RMSE on holdout (€)")
+        st.subheader(
+            "RMSE on holdout (€)",
+            help=(
+                "The holdout is a fixed set of 2,000 real policy rows drawn from the dataset "
+                "before any training begins. These rows are oracle-labeled once and never used "
+                "as anchors or training data during the AL loop. RMSE is computed on this set "
+                "each week, so it is comparable across strategies and weeks.\n\n"
+                "Because the holdout is drawn from the real data distribution, it is "
+                "population-representative — a strategy that performs well here has learned "
+                "the tariff broadly, not just in the regions it chose to scrape."
+            ),
+        )
         fig_rmse = convergence_figure(df_s1, "rmse", "RMSE (€)", selected_strategies)
         st.plotly_chart(fig_rmse, use_container_width=True)
 
@@ -278,7 +289,19 @@ with tab2:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("RMSE recovery")
+        st.subheader(
+            "RMSE recovery",
+            help=(
+                "The holdout is a fixed set of 2,000 real policy rows drawn from the dataset "
+                "before any training begins. These rows are oracle-labeled once and never used "
+                "as anchors or training data during the AL loop. After the tariff change, "
+                "holdout labels are recomputed with the new oracle — so RMSE measures recovery "
+                "of the new tariff, not the old one.\n\n"
+                "Because the holdout is drawn from the real data distribution, it is "
+                "population-representative — a strategy that performs well here has learned "
+                "the new tariff broadly, not just in the repriced segment."
+            ),
+        )
         fig_tc_rmse = convergence_figure(
             df_s2, "rmse", "RMSE (€)", selected_strategies,
             tariff_change_week=tariff_week,
