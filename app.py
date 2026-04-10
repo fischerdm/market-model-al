@@ -114,16 +114,24 @@ def convergence_figure(
     return fig
 
 
+def has_shap(df: pd.DataFrame) -> bool:
+    """True when the results contain non-NaN SHAP similarity values."""
+    return "shap_cosine_similarity" in df.columns and df["shap_cosine_similarity"].notna().any()
+
+
 def summary_table(df: pd.DataFrame, strategies: list[str]) -> pd.DataFrame:
     """Final-week metrics for each strategy, formatted for display."""
     max_week = df["week"].max()
     final = df[df["week"] == max_week].copy()
     final = final[final["strategy"].isin(strategies)]
-    final = final.set_index("strategy_label")[
-        ["n_labeled", "rmse", "rel_rmse", "shap_cosine_similarity"]
-    ]
+    cols = ["n_labeled", "rmse", "rel_rmse"]
+    col_labels = ["Labeled profiles", "RMSE (€)", "Relative RMSE"]
+    if has_shap(df):
+        cols.append("shap_cosine_similarity")
+        col_labels.append("SHAP similarity")
+    final = final.set_index("strategy_label")[cols]
     final.index.name = "Strategy"
-    final.columns = ["Labeled profiles", "RMSE (€)", "Relative RMSE", "SHAP similarity"]
+    final.columns = col_labels
     return final
 
 
@@ -227,24 +235,27 @@ with tab1:
         st.plotly_chart(fig_rmse, use_container_width=True)
 
     with col2:
-        st.subheader(
-            "SHAP cosine similarity  ⚗️ simulation only",
-            help=(
-                "Measures how well the competitor model has recovered the global tariff structure "
-                "of the oracle — not just accuracy in specific regions, but whether each feature "
-                "pushes prices in the right direction and with the right relative magnitude. "
-                "A score of 1 means perfect structural alignment.\n\n"
-                "Simulation-only metric: computed by comparing the competitor model's SHAP values "
-                "against the oracle's SHAP values on the holdout set. In a real-world deployment "
-                "you do not have access to the competitor's internal model, so this metric cannot "
-                "be observed in practice. It is included here as a diagnostic to reveal how well "
-                "each strategy recovers the underlying tariff structure, not just prediction accuracy."
-            ),
-        )
-        fig_shap = convergence_figure(
-            df_s1, "shap_cosine_similarity", "Cosine similarity", selected_strategies
-        )
-        st.plotly_chart(fig_shap, use_container_width=True)
+        if has_shap(df_s1):
+            st.subheader(
+                "SHAP cosine similarity  ⚗️ simulation only",
+                help=(
+                    "Measures how well the competitor model has recovered the global tariff structure "
+                    "of the oracle — not just accuracy in specific regions, but whether each feature "
+                    "pushes prices in the right direction and with the right relative magnitude. "
+                    "A score of 1 means perfect structural alignment.\n\n"
+                    "Simulation-only metric: computed by comparing the competitor model's SHAP values "
+                    "against the oracle's SHAP values on the holdout set. In a real-world deployment "
+                    "you do not have access to the competitor's internal model, so this metric cannot "
+                    "be observed in practice. It is included here as a diagnostic to reveal how well "
+                    "each strategy recovers the underlying tariff structure, not just prediction accuracy."
+                ),
+            )
+            fig_shap = convergence_figure(
+                df_s1, "shap_cosine_similarity", "Cosine similarity", selected_strategies
+            )
+            st.plotly_chart(fig_shap, use_container_width=True)
+        else:
+            st.info("SHAP similarity was disabled in `config/simulation.yaml` for this run.", icon="ℹ️")
 
     # Relative RMSE as an alternative metric (shown only if selected)
     if metric_col == "rel_rmse":
@@ -269,7 +280,21 @@ with tab1:
 # ──────────────────────────────────────────────────────────────────────────────
 
 with tab2:
-    df_s2 = df_all[df_all["scenario"] == "tariff_change"]
+    tc_scenario_names = [s for s in df_all["scenario"].unique() if s != "no_tariff_change"]
+
+    if not tc_scenario_names:
+        st.info("No tariff-change scenarios found in the results. "
+                "Add entries to `perturbation_schedule` in `config/simulation.yaml` "
+                "and re-run the simulation.")
+        st.stop()
+
+    selected_scenario = st.selectbox(
+        "Tariff-change scenario",
+        options=tc_scenario_names,
+        key="tc_scenario_select",
+    )
+
+    df_s2 = df_all[df_all["scenario"] == selected_scenario]
     df_s2 = df_s2[df_s2["strategy"].isin(selected_strategies)]
 
     # Find the tariff change week from the data
@@ -279,7 +304,7 @@ with tab2:
     st.header("Tariff change recovery")
     if tariff_week is not None:
         st.caption(
-            f"Young-driver surcharge (+20%) injected at **week {tariff_week}**. "
+            f"Tariff change injected at **week {tariff_week}**. "
             "RMSE is measured against the *new* oracle after that point. "
             "A good strategy recovers quickly without a full restart."
         )
@@ -309,25 +334,28 @@ with tab2:
         st.plotly_chart(fig_tc_rmse, use_container_width=True)
 
     with col2:
-        st.subheader(
-            "SHAP similarity recovery  ⚗️ simulation only",
-            help=(
-                "Measures how well the competitor model has recovered the global tariff structure "
-                "of the oracle — not just accuracy in specific regions, but whether each feature "
-                "pushes prices in the right direction and with the right relative magnitude. "
-                "A score of 1 means perfect structural alignment.\n\n"
-                "Simulation-only metric: computed by comparing the competitor model's SHAP values "
-                "against the oracle's SHAP values on the holdout set. In a real-world deployment "
-                "you do not have access to the competitor's internal model, so this metric cannot "
-                "be observed in practice. It is included here as a diagnostic to reveal how well "
-                "each strategy recovers the underlying tariff structure, not just prediction accuracy."
-            ),
-        )
-        fig_tc_shap = convergence_figure(
-            df_s2, "shap_cosine_similarity", "Cosine similarity", selected_strategies,
-            tariff_change_week=tariff_week,
-        )
-        st.plotly_chart(fig_tc_shap, use_container_width=True)
+        if has_shap(df_s2):
+            st.subheader(
+                "SHAP similarity recovery  ⚗️ simulation only",
+                help=(
+                    "Measures how well the competitor model has recovered the global tariff structure "
+                    "of the oracle — not just accuracy in specific regions, but whether each feature "
+                    "pushes prices in the right direction and with the right relative magnitude. "
+                    "A score of 1 means perfect structural alignment.\n\n"
+                    "Simulation-only metric: computed by comparing the competitor model's SHAP values "
+                    "against the oracle's SHAP values on the holdout set. In a real-world deployment "
+                    "you do not have access to the competitor's internal model, so this metric cannot "
+                    "be observed in practice. It is included here as a diagnostic to reveal how well "
+                    "each strategy recovers the underlying tariff structure, not just prediction accuracy."
+                ),
+            )
+            fig_tc_shap = convergence_figure(
+                df_s2, "shap_cosine_similarity", "Cosine similarity", selected_strategies,
+                tariff_change_week=tariff_week,
+            )
+            st.plotly_chart(fig_tc_shap, use_container_width=True)
+        else:
+            st.info("SHAP similarity was disabled in `config/simulation.yaml` for this run.", icon="ℹ️")
 
     st.subheader(f"Final-week summary (week {n_weeks})")
     tbl2 = summary_table(df_s2, selected_strategies)
