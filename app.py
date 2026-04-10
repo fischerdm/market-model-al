@@ -193,7 +193,7 @@ if not selected_strategies:
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3 = st.tabs(["Strategy comparison", "Tariff change recovery", "Segment breakdown"])
+tab1, tab2, tab3, tab4 = st.tabs(["Strategy comparison", "Tariff change recovery", "Segment breakdown", "Strategy guide"])
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tab 1: Strategy comparison (no tariff change)
@@ -398,3 +398,147 @@ with tab3:
             final_seg.style.format("{:.2f}").highlight_min(axis=0, color="#d4edda"),
             use_container_width=True,
         )
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Tab 4: Strategy guide
+# ──────────────────────────────────────────────────────────────────────────────
+
+with tab4:
+    st.header("Strategy guide")
+    st.caption(
+        "How each strategy selects which anchor rows to scrape each week. "
+        "All strategies share the same weekly profile budget and the same "
+        "ceteris-paribus profile generation step — they differ only in *which anchors* they pick."
+    )
+
+    st.info(
+        "**Simulation mechanics note:** within a single week, anchors are sampled without "
+        "replacement from the candidate pool. However, there is no memory across weeks — "
+        "the same anchor row can in principle be selected again in a later week, generating "
+        "duplicate CP profiles in the labeled set. In practice this is rare given the large "
+        "anchor pool (~100k rows) and small weekly selection (~19 anchors), but it is a known "
+        "simplification shared by all strategies.",
+        icon="ℹ️",
+    )
+
+    st.divider()
+
+    strategies_info = [
+        {
+            "name": "Random",
+            "key": "random",
+            "tag": "Baseline",
+            "tag_color": "#888888",
+            "summary": "Selects anchors uniformly at random from the candidate pool each week.",
+            "strengths": [
+                "Representative by construction — every region of feature space is sampled in proportion to its true frequency.",
+                "No model required to score candidates, so it is the fastest strategy.",
+                "Robust: cannot be fooled by a mis-specified scoring model.",
+            ],
+            "weaknesses": [
+                "Ignores all information about where the competitor model is currently wrong.",
+                "Budget is spread evenly even when some segments are well-understood and others are not.",
+            ],
+            "when": "Strong general-purpose baseline. Hard to beat on global RMSE and SHAP similarity because it never sacrifices representativeness.",
+        },
+        {
+            "name": "Uncertainty",
+            "key": "uncertainty",
+            "tag": "Informativeness",
+            "tag_color": "#1f77b4",
+            "summary": "Trains several bootstrap-resampled models and selects anchors where their predictions disagree most (high variance).",
+            "strengths": [
+                "Targets regions where the model genuinely lacks confidence.",
+                "Does not require oracle access during scoring.",
+            ],
+            "weaknesses": [
+                "Bootstrap variance is a proxy for uncertainty, not for actual error.",
+                "Concentrates on sparse or high-variance regions, starving well-populated segments.",
+                "Slower than random due to fitting multiple models each week.",
+            ],
+            "when": "Useful when the feature space has large unexplored regions. Less effective once the warm start already covers the main effects.",
+        },
+        {
+            "name": "Error-based",
+            "key": "error_based",
+            "tag": "Informativeness",
+            "tag_color": "#ff7f0e",
+            "summary": "Trains a proxy model on labeled residuals and selects anchors predicted to have the highest absolute error.",
+            "strengths": [
+                "Directly targets where the competitor model is currently most wrong.",
+                "Recovers specific high-error segments faster than random (e.g. young drivers).",
+            ],
+            "weaknesses": [
+                "Greedy: concentrates budget on the hardest segment, leaving others under-sampled.",
+                "Global RMSE and SHAP similarity suffer from the resulting distribution mismatch.",
+            ],
+            "when": "Best when you care primarily about one known high-error segment rather than global convergence.",
+        },
+        {
+            "name": "SHAP divergence",
+            "key": "shap_divergence",
+            "tag": "Informativeness",
+            "tag_color": "#2ca02c",
+            "summary": "Computes SHAP values for both oracle and competitor at each candidate anchor and selects anchors with the largest L2 divergence.",
+            "strengths": [
+                "Targets structural misalignment in feature attributions, not just prediction error.",
+                "In theory the most principled signal for tariff structure recovery.",
+            ],
+            "weaknesses": [
+                "Highly greedy: concentrates on edge cases (young drivers, high-power cars) and starves mainstream segments.",
+                "Global SHAP similarity *drops* over time — the strategy optimises for local agreement at the cost of global structural alignment.",
+                "Slowest strategy: requires computing SHAP for the full candidate pool each week.",
+            ],
+            "when": "Not recommended as a standalone strategy. The distribution mismatch it creates undermines the very metric it targets.",
+        },
+        {
+            "name": "Segment-adaptive",
+            "key": "segment_adaptive",
+            "tag": "Adaptive",
+            "tag_color": "#9467bd",
+            "summary": "Scores each anchor by the global relative RMSE plus the relative RMSE of every named segment it belongs to. Anchors in high-error segments are prioritised; anchors outside all segments compete on the global baseline.",
+            "strengths": [
+                "Dynamic: allocation shifts automatically as segment gaps open and close.",
+                "Uses relative RMSE (RMSE / mean premium) so high-premium segments are not permanently over-sampled.",
+                "No starvation: anchors outside named segments always receive the global baseline score.",
+                "Converges toward random as segment gaps close.",
+            ],
+            "weaknesses": [
+                "Reacts to persistent difficulty, not sudden disruption — segments that are always hard receive extra budget every week, even when nothing has changed.",
+                "Segment definitions are fixed; segments not in the list are invisible to the strategy.",
+            ],
+            "when": "Good all-round strategy when you expect persistent difficulty in specific named segments.",
+        },
+        {
+            "name": "Disruption-adaptive",
+            "key": "disruption",
+            "tag": "Adaptive",
+            "tag_color": "#d62728",
+            "summary": "Monitors the week-on-week *change* in per-segment RMSE. When a segment's RMSE increases by more than 15% relative to the previous week, the full budget is concentrated on random sampling within the disrupted segment(s). Reverts to global random when no disruption is detected.",
+            "strengths": [
+                "Uses the derivative of RMSE, not its level — fires on disruption, not on permanent difficulty.",
+                "Robust to segments that are always hard (e.g. young drivers): ignores them unless they suddenly worsen.",
+                "Does not discard any labeled data — old labels from unchanged segments remain valid and in the training set.",
+                "Automatically resets after recovery: no manual intervention needed.",
+            ],
+            "weaknesses": [
+                "Blind to gradual drift — only reacts to sharp week-on-week spikes.",
+                "The 15% threshold is a fixed hyperparameter; too low triggers false positives, too high misses soft changes.",
+                "Falls back to random on the first week (no prior RMSE to compare against).",
+            ],
+            "when": "Best response to sudden, localised tariff changes. Outperforms restart strategies because it does not discard valid labels from unchanged segments.",
+        },
+    ]
+
+    for info in strategies_info:
+        with st.expander(f"**{info['name']}**  —  {info['summary']}", expanded=False):
+            col_s, col_w = st.columns(2)
+            with col_s:
+                st.markdown("**Strengths**")
+                for s in info["strengths"]:
+                    st.markdown(f"- {s}")
+            with col_w:
+                st.markdown("**Weaknesses**")
+                for w in info["weaknesses"]:
+                    st.markdown(f"- {w}")
+            st.markdown(f"**When to use:** {info['when']}")
