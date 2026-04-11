@@ -248,6 +248,20 @@ st.set_page_config(
     page_title="AL Competitor Model",
     layout="wide",
     initial_sidebar_state="expanded",
+    menu_items={
+        "About": (
+            "An insurer scraping competitor quotes from an aggregator website can't afford to "
+            "scrape everything — it has to choose *what* to request. This app explores that "
+            "choice using active learning (AL): a simulated competitor model is retrained each "
+            "week on oracle-labeled ceteris-paribus profiles, and five query strategies compete "
+            "to recover the competitor's tariff as fast as possible.\n\n"
+            "The oracle is a LightGBM model trained on a real Spanish motor vehicle portfolio "
+            "([Mendeley Data, doi: 10.17632/5cxyb5fp4f.2](https://data.mendeley.com/datasets/5cxyb5fp4f/2)). "
+            "Strategies are evaluated on holdout RMSE, per-segment RMSE, and SHAP cosine similarity.\n\n"
+            "Built with Streamlit, LightGBM, SHAP, and Plotly.  \n"
+            "David Fischer · April 2026"
+        ),
+    },
 )
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
