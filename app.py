@@ -370,7 +370,7 @@ with tab1:
         selected_strategies, change_weeks=tc_weeks_t1,
         plotly_theme="plotly_dark",
     )
-    st.plotly_chart(fig_t1, use_container_width=True)
+    st.plotly_chart(fig_t1, width="stretch")
 
     # ── Segment composition heatmap ───────────────────────────────────────────
     seg_cols_t1 = [f"rmse_{seg.key}" for seg in SEGMENTS]
@@ -392,8 +392,8 @@ with tab1:
             value=all_weeks[-1],
             key="heatmap_week_t1",
         )
-        fig_heatmap = segment_heatmap(df_t1, heatmap_week, selected_strategies, plotly_theme=plotly_theme)
-        st.plotly_chart(fig_heatmap, use_container_width=True)
+        fig_heatmap = segment_heatmap(df_t1, heatmap_week, selected_strategies, plotly_theme="plotly_dark")
+        st.plotly_chart(fig_heatmap, width="stretch")
 
     # ── Summary table ─────────────────────────────────────────────────────────
     st.subheader(f"Final-week summary (week {n_weeks})")
@@ -405,7 +405,7 @@ with tab1:
             "Relative RMSE":    "{:.4f}",
             "SHAP similarity":  "{:.4f}",
         }),
-        use_container_width=True,
+        width="stretch",
     )
 
     # ── Pre vs post tariff change (only when relevant) ────────────────────────
@@ -430,7 +430,7 @@ with tab1:
             .rename_axis("Strategy")
         )
         if not pivot.empty:
-            st.dataframe(pivot.style.format("{:.2f}"), use_container_width=True)
+            st.dataframe(pivot.style.format("{:.2f}"), width="stretch")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tab 2: Segment breakdown
@@ -472,7 +472,7 @@ with tab2:
                 df_t2, col, "RMSE (€)", selected_strategies, change_weeks=tc_weeks_t2,
                 plotly_theme="plotly_dark",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         st.subheader(f"Final-week segment RMSE (week {n_weeks})")
         max_week  = df_t2["week"].max()
@@ -484,7 +484,7 @@ with tab2:
         final_seg.index.name = "Strategy"
         st.dataframe(
             final_seg.style.format("{:.2f}").highlight_min(axis=0, color="#d4edda"),
-            use_container_width=True,
+            width="stretch",
         )
 
 # ──────────────────────────────────────────────────────────────────────────────
