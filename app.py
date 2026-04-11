@@ -483,7 +483,9 @@ with tab2:
         final_seg.columns = [seg.label for seg in SEGMENTS]
         final_seg.index.name = "Strategy"
         st.dataframe(
-            final_seg.style.format("{:.2f}").highlight_min(axis=0, color="#d4edda"),
+            final_seg.style.format("{:.2f}").highlight_min(
+                axis=0, props="background-color: #d4edda; color: black;"
+            ),
             width="stretch",
         )
 
