@@ -40,20 +40,20 @@ SEGMENTS: list[Segment] = [
     Segment(
         key="high_value",
         label="High-value cars",
-        description="Value_vehicle > 25 000",
-        filter_fn=lambda X: X["Value_vehicle"] > 25_000,
+        description="Value_vehicle > 28 000",
+        filter_fn=lambda X: X["Value_vehicle"] > 28_000,
     ),
     Segment(
         key="high_power",
         label="High-power cars",
-        description="Power > 150 hp",
-        filter_fn=lambda X: X["Power"] > 150,
+        description="Power > 130 hp",
+        filter_fn=lambda X: X["Power"] > 130,
     ),
     Segment(
         key="senior_driver",
         label="Senior drivers",
-        description="driver_age >= 60",
-        filter_fn=lambda X: X["driver_age"] >= 60,
+        description="driver_age >= 65",
+        filter_fn=lambda X: X["driver_age"] >= 65,
     ),
 ]
 
