@@ -69,7 +69,7 @@ from market_model_al.strategies import (
 )
 
 
-_HOLDOUT_N = 2_000   # fixed holdout size, carved from real_X at construction time
+_HOLDOUT_N = 5_000   # fixed holdout size, carved from real_X at construction time
 
 
 class ALSimulation:
