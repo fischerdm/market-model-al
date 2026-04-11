@@ -33,7 +33,7 @@ The **weekly AL loop** generates fresh CP candidate profiles each week and uses 
 | Disruption-adaptive | Concentrates budget on segments with a sharp week-on-week RMSE spike; falls back to random otherwise | Yes |
 
 Convergence is tracked in two metrics:
-- **RMSE on holdout** — a fixed set of 2,000 real rows, oracle-labeled, never used during training. Measures prediction accuracy on a population-representative sample.
+- **RMSE on holdout** — a fixed set of 5,000 real rows, oracle-labeled, never used during training. Measures prediction accuracy on a population-representative sample.
 - **SHAP cosine similarity** *(simulation-only diagnostic)* — compares the competitor model's SHAP vectors to the oracle's on the holdout. Captures whether the tariff *structure* has been recovered, not just the premium levels. Requires oracle access, so it cannot be observed in real-world deployment.
 
 **Tariff change simulation**: a `PerturbedOracleEngine` can be injected at one or more configurable weeks within a single simulation run to simulate a competitor repricing event (e.g. young-driver surcharge +20%, area repricing, or composed stacked shocks). Multiple shocks can be chained — the competitor model experiences all of them in one continuous timeline, with the RMSE curve measuring recovery of the *currently active* tariff at each point. Simulations and perturbation types are fully defined in YAML config files, with no code changes required to add new scenarios.
@@ -69,7 +69,8 @@ market-model-al/
 │   ├── 02_oracle_engine_smoke.py       # smoke test: OraclePricingEngine
 │   ├── 03_profile_generator_smoke.py   # smoke test: ceteris-paribus generator
 │   ├── 04_build_warm_start.py          # build warm start dataset (~5k real rows)
-│   └── 05_al_simulation.py             # run all simulations, save results + figures
+│   ├── 05_al_simulation.py             # run all simulations, save results + figures
+│   └── 06_segment_summary.py           # segment distribution analysis + threshold calibration
 ├── src/
 │   └── market_model_al/
 │       ├── features.py           # feature engineering
@@ -79,6 +80,8 @@ market-model-al/
 │       ├── competitor_model.py   # CompetitorModel: LightGBM, retrained each iteration
 │       ├── strategies.py         # AL query strategies
 │       ├── segments.py           # four actuarial segments + segment_rmse(), segment_rel_rmse()
+│       │                         #   young_driver <30 (8.8%), high_value >28k (11.8%),
+│       │                         #   high_power >130hp (10.9%), senior_driver ≥65 (9.5%)
 │       ├── al_loop.py            # ALSimulation: weekly loop, multi-shock tariff change + restart
 │       ├── perturbed_oracle.py   # PerturbedOracleEngine + preset perturbation functions
 │       └── config.py             # YAML loaders, resolve_simulations, perturbation factory

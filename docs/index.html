@@ -396,8 +396,27 @@
     </div>
 
     <p>
+      Segment-level RMSE is tracked alongside global RMSE across all weeks. Four commercially
+      motivated segments are defined, each covering roughly 10% of the Spanish portfolio:
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Segment</th><th>Threshold</th><th class="num">% of portfolio</th><th class="num">Rows in holdout</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Young drivers</td><td>driver_age &lt; 30</td><td class="num">8.8%</td><td class="num">~440</td></tr>
+          <tr><td>High-value cars</td><td>Value_vehicle &gt; €28 000</td><td class="num">11.8%</td><td class="num">~590</td></tr>
+          <tr><td>High-power cars</td><td>Power &gt; 130 hp</td><td class="num">10.9%</td><td class="num">~546</td></tr>
+          <tr><td>Senior drivers</td><td>driver_age ≥ 65</td><td class="num">9.5%</td><td class="num">~475</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
       Convergence is tracked in two complementary metrics. <strong>RMSE on holdout</strong> —
-      a fixed set of 2,000 real rows, oracle-labeled, never used during training — measures
+      a fixed set of 5,000 real rows, oracle-labeled, never used during training — measures
       prediction accuracy on a population-representative sample. <strong>SHAP cosine
       similarity</strong> is a simulation-only diagnostic that compares the competitor
       model's SHAP vectors to the oracle's, capturing whether the tariff <em>structure</em>
