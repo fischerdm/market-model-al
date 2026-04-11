@@ -243,9 +243,14 @@ st.set_page_config(
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.title("Competitor Tariff Recovery — Active Learning Strategy Evaluator")
+    st.title("Active Learning Strategy Evaluator")
     st.markdown(
-        "<p style='font-size:0.95rem; color: grey;'>Random scraping is harder to beat than you'd think. Explore why — and when it isn't — with this configurable app.</p>",
+        "<p style='font-size:0.95rem; color: grey;'>"
+        "Simulate how an insurer reverse-engineers a competitor's tariff by scraping quotes "
+        "from an aggregator — and test which active learning strategy gets there fastest. "
+        "Random scraping is harder to beat than you'd think. "
+        "Explore why — and when it isn't — with this configurable app."
+        "</p>",
         unsafe_allow_html=True,
     )
 
