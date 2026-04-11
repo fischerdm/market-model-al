@@ -46,9 +46,16 @@ PALETTE = {
 }
 
 METRIC_OPTIONS = {
-    "RMSE (€)":               "rmse",
+    "RMSE":                   "rmse",
     "Relative RMSE":          "rel_rmse",
     "SHAP cosine similarity": "shap_cosine_similarity",
+}
+
+# Y-axis labels for charts — may include units not shown in the radio buttons
+METRIC_AXIS_LABELS = {
+    "rmse":                   "RMSE (€)",
+    "rel_rmse":               "Relative RMSE",
+    "shap_cosine_similarity": "Cosine similarity",
 }
 
 METRIC_HELP = {
@@ -375,7 +382,7 @@ with tab1:
         )
 
     fig_t1 = convergence_figure(
-        df_t1, metric_col_t1, metric_label_t1,
+        df_t1, metric_col_t1, METRIC_AXIS_LABELS[metric_col_t1],
         selected_strategies, change_weeks=tc_weeks_t1,
         plotly_theme="plotly_dark",
     )
