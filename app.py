@@ -472,29 +472,6 @@ with tab1:
         width="stretch",
     )
 
-    # ── Pre vs post tariff change (only when relevant) ────────────────────────
-    if tc_weeks_t1:
-        first_tc  = tc_weeks_t1[0]
-        pre_week  = max(0, first_tc - 1)
-        post_week = n_weeks
-        st.subheader(f"Pre- vs post-change RMSE (week {pre_week} → week {post_week})")
-        compare = (
-            df_t1[
-                df_t1["week"].isin([pre_week, post_week])
-                & df_t1["strategy"].isin(selected_strategies)
-            ].copy()
-        )
-        compare["period"] = compare["week"].apply(
-            lambda w: f"Pre-change (wk {pre_week})"
-            if w == pre_week else f"Post-change (wk {post_week})"
-        )
-        pivot = (
-            compare
-            .pivot_table(index="strategy_label", columns="period", values="rmse")
-            .rename_axis("Strategy")
-        )
-        if not pivot.empty:
-            st.dataframe(pivot.style.format("{:.2f}"), width="stretch")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tab 2: Segment breakdown
