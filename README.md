@@ -78,7 +78,7 @@ market-model-al/
 │       ├── profile_generator.py  # ceteris-paribus candidate generation (ad hoc)
 │       ├── competitor_model.py   # CompetitorModel: LightGBM, retrained each iteration
 │       ├── strategies.py         # AL query strategies
-│       ├── segments.py           # four actuarial segments + segment_rmse()
+│       ├── segments.py           # four actuarial segments + segment_rmse(), segment_rel_rmse()
 │       ├── al_loop.py            # ALSimulation: weekly loop, multi-shock tariff change + restart
 │       ├── perturbed_oracle.py   # PerturbedOracleEngine + preset perturbation functions
 │       └── config.py             # YAML loaders, resolve_simulations, perturbation factory
@@ -87,7 +87,7 @@ market-model-al/
 │   ├── models/             # oracle.pkl (not committed)
 │   ├── warm_start/         # warm_start_X.parquet, warm_start_y.npy (not committed)
 │   └── al_results/         # results.parquet (not committed)
-├── app.py                  # Streamlit dashboard (4 tabs)
+├── app.py                  # Streamlit dashboard (3 tabs)
 └── pyproject.toml
 ```
 

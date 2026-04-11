@@ -180,9 +180,14 @@ def segment_heatmap(
     df: pd.DataFrame,
     week: int,
     strategies: list[str],
+    metric: str = "rmse",
     plotly_theme: str = "plotly_dark",
 ) -> go.Figure:
-    """Heatmap: strategies (rows) × segments (columns), colour = RMSE at *week*.
+    """Heatmap: strategies (rows) × segments (columns), colour = metric at *week*.
+
+    Supports metric='rmse' (uses rmse_{key} columns) and metric='rel_rmse'
+    (uses rel_rmse_{key} columns, stored at simulation time using per-segment
+    mean premium as the denominator).
 
     Red = high error, green = low error.  Missing values (NaN) are shown in grey.
     """
@@ -192,19 +197,23 @@ def segment_heatmap(
     snap = df[df["week"] == week].copy()
     snap = snap[snap["strategy"].isin(strategies)]
 
+    col_prefix   = "rel_rmse_" if metric == "rel_rmse" else "rmse_"
+    val_fmt      = ".4f"        if metric == "rel_rmse" else ".2f"
+    colorbar_ttl = "Rel. RMSE"  if metric == "rel_rmse" else "RMSE (€)"
+    hover_label  = "Rel. RMSE"  if metric == "rel_rmse" else "RMSE"
+
     # Build matrix: rows = strategies (in sidebar order), cols = segments
-    strat_labels = [STRATEGY_LABELS.get(s, s) for s in strategies if not snap[snap["strategy"] == s].empty]
-    strat_order  = [s for s in strategies if not snap[snap["strategy"] == s].empty]
+    strat_order = [s for s in strategies if not snap[snap["strategy"] == s].empty]
 
     z, text = [], []
     for strat in strat_order:
         row_df = snap[snap["strategy"] == strat]
         row_z, row_t = [], []
         for key in seg_keys:
-            col = f"rmse_{key}"
+            col = f"{col_prefix}{key}"
             val = row_df[col].values[0] if col in row_df.columns and len(row_df) else float("nan")
             row_z.append(val if pd.notna(val) else None)
-            row_t.append(f"{val:.2f}" if pd.notna(val) else "n/a")
+            row_t.append(format(val, val_fmt) if pd.notna(val) else "n/a")
         z.append(row_z)
         text.append(row_t)
 
@@ -216,9 +225,9 @@ def segment_heatmap(
         texttemplate="%{text}",
         textfont=dict(size=12),
         colorscale="RdYlGn_r",
-        colorbar=dict(title="RMSE (€)"),
+        colorbar=dict(title=colorbar_ttl),
         hoverongaps=False,
-        hovertemplate="<b>%{y}</b><br>%{x}<br>RMSE: %{text}<extra></extra>",
+        hovertemplate=f"<b>%{{y}}</b><br>%{{x}}<br>{hover_label}: %{{text}}<extra></extra>",
     ))
     fig.update_layout(
         template=plotly_theme,
@@ -303,7 +312,8 @@ with st.sidebar:
 
     st.divider()
     st.caption(
-        "Based on a synthetic Spanish motor portfolio. "
+        "Based on a real Spanish motor portfolio "
+        "([doi: 10.17632/5cxyb5fp4f.2](https://data.mendeley.com/datasets/5cxyb5fp4f/2)). "
         "Strategy rankings may differ with your own data, tariff structure, and budget."
     )
     st.caption("David Fischer · April 2026")
@@ -409,18 +419,19 @@ with tab1:
     st.subheader(
         "Segment breakdown",
         help=(
-            "RMSE broken down by actuarial segment for a chosen week. "
+            "Metric broken down by actuarial segment for a chosen week. "
             "Red = high error, green = low error. "
             "Use the slider to scrub through time and see how each strategy's "
             "error shifts across segments — greedy strategies tend to fix one "
             "segment at the cost of starving others.\n\n"
-            "Only available for RMSE; per-segment data is not stored for other metrics."
+            "Available for RMSE and Relative RMSE. "
+            "SHAP cosine similarity has no per-segment equivalent."
         ),
     )
-    if metric_col_t1 != "rmse":
+    if metric_col_t1 == "shap_cosine_similarity":
         st.info(
-            "Segment breakdown is only available for the RMSE metric. "
-            "Switch the metric selector above to RMSE to enable it.",
+            "Segment breakdown is not available for SHAP cosine similarity — "
+            "there is no per-segment equivalent of this metric.",
             icon="ℹ️",
         )
     elif not has_segs_t1:
@@ -436,7 +447,10 @@ with tab1:
             value=all_weeks_heatmap[-1],
             key="heatmap_week_t1",
         )
-        fig_heatmap = segment_heatmap(df_t1, heatmap_week, selected_strategies, plotly_theme="plotly_dark")
+        fig_heatmap = segment_heatmap(
+            df_t1, heatmap_week, selected_strategies,
+            metric=metric_col_t1, plotly_theme="plotly_dark",
+        )
         st.plotly_chart(fig_heatmap, width="stretch")
 
     # ── Summary table ─────────────────────────────────────────────────────────
@@ -459,29 +473,6 @@ with tab1:
         width="stretch",
     )
 
-    # ── Pre vs post tariff change (only when relevant) ────────────────────────
-    if tc_weeks_t1:
-        first_tc  = tc_weeks_t1[0]
-        pre_week  = max(0, first_tc - 1)
-        post_week = n_weeks
-        st.subheader(f"Pre- vs post-change RMSE (week {pre_week} → week {post_week})")
-        compare = (
-            df_t1[
-                df_t1["week"].isin([pre_week, post_week])
-                & df_t1["strategy"].isin(selected_strategies)
-            ].copy()
-        )
-        compare["period"] = compare["week"].apply(
-            lambda w: f"Pre-change (wk {pre_week})"
-            if w == pre_week else f"Post-change (wk {post_week})"
-        )
-        pivot = (
-            compare
-            .pivot_table(index="strategy_label", columns="period", values="rmse")
-            .rename_axis("Strategy")
-        )
-        if not pivot.empty:
-            st.dataframe(pivot.style.format("{:.2f}"), width="stretch")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tab 2: Segment breakdown

@@ -58,7 +58,7 @@ from sklearn.metrics import mean_squared_error
 
 from market_model_al.competitor_model import CompetitorModel
 from market_model_al.profile_generator import generate_ceteris_paribus, PROFILES_PER_ANCHOR
-from market_model_al.segments import segment_rmse
+from market_model_al.segments import segment_rmse, segment_rel_rmse
 from market_model_al.strategies import (
     STRATEGIES,
     random_query,
@@ -251,7 +251,8 @@ class ALSimulation:
             shap_sim = (self._shap_similarity(competitor)
                         if self._compute_shap_similarity else float("nan"))
 
-            seg_rmse = segment_rmse(self._holdout_X, holdout_y, preds)
+            seg_rmse     = segment_rmse(self._holdout_X, holdout_y, preds)
+            seg_rel_rmse = segment_rel_rmse(self._holdout_X, holdout_y, preds)
 
             elapsed = time.perf_counter() - t0
             records.append(dict(
@@ -265,6 +266,7 @@ class ALSimulation:
                 tariff_change_applied=change_applied_this_week,
                 elapsed_s=elapsed,
                 **{f"rmse_{k}": v for k, v in seg_rmse.items()},
+                **{f"rel_rmse_{k}": v for k, v in seg_rel_rmse.items()},
             ))
             print(
                 f"  week {week:3d} | labeled={len(labeled_X):6,} | "

@@ -37,6 +37,7 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
 
    **Convergence metrics**:
    - **RMSE on holdout** — 2,000 real rows carved from the dataset at construction time, oracle-labeled, never used for training. Population-representative; comparable across weeks and strategies.
+   - **Relative RMSE** — RMSE / mean holdout premium (global normalisation). Per-segment relative RMSE is also stored at simulation time via `segment_rel_rmse()` in `segments.py`, using each segment's own mean premium as denominator. The dashboard heatmap supports both RMSE and Relative RMSE at the segment level.
    - **SHAP cosine similarity** *(simulation-only)* — mean cosine similarity between oracle and competitor SHAP vectors on the holdout. Measures tariff *structure* recovery, not just premium accuracy. Requires oracle access → cannot be observed in real-world deployment. Included as a simulation diagnostic only.
 
    **AL query strategies** (all deployable in practice except where noted):
