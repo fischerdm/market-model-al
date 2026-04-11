@@ -79,3 +79,8 @@ Used in two places:
 
 ## Stack
 Python 3.12, LightGBM, SHAP, Streamlit, PyYAML. All notebooks are `.py` files (numbered), not `.ipynb`. Virtual environment is `.venv` (not conda).
+
+## Dashboard notes
+
+### Theming
+The dashboard uses a dark theme defined in `.streamlit/config.toml` (GitHub-dark palette). A light-mode toggle was prototyped using CSS injection (`st.markdown(unsafe_allow_html=True)`) but abandoned: tab labels and `st.dataframe` metric text remained hard to read and would have required extensive per-element CSS to fix. The `_LIGHT_CSS` block and `THEMES` dict were removed from `app.py`. If light mode is revisited, the right approach is probably a separate `config.toml` profile or a custom Streamlit component rather than CSS overrides.
