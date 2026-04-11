@@ -305,6 +305,7 @@ with st.sidebar:
         "Based on a synthetic Spanish motor portfolio. "
         "Strategy rankings may differ with your own data, tariff structure, and budget."
     )
+    st.caption("David Fischer · April 2026")
 
 # ── Guard: need at least one strategy ─────────────────────────────────────────
 
