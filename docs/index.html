@@ -418,7 +418,10 @@
       The perturbation library (<code>tariff_changes.yaml</code>) holds named definitions
       — young-driver surcharge, high-value surcharge, uniform reprice, area repricing,
       and composed stacked shocks — which are referenced by name from each simulation's
-      schedule in <code>simulation.yaml</code>. Adding a new scenario requires no code changes.
+      schedule in <code>simulation.yaml</code>. A schedule entry can list multiple perturbation
+      names to apply them simultaneously at the same week (e.g. high-value surcharge and
+      young-driver surcharge both at week 4), or spread across different weeks for sequential
+      multi-wave shocks. Adding a new scenario requires no code changes.
     </p>
     <p>
       This lets practitioners answer a critical operational question: is the weekly
