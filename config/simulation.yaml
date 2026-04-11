@@ -70,13 +70,13 @@ simulations:
       - week: 3
         perturbations: [young_driver_surcharge]
 
-  - name: high_value_shock
-    label: "High-value vehicle surcharge at week 4"
+  - name: simultaneous_shocks
+    label: "High-value vehicle and young-driver surcharge at week 4"
     tariff_changes:
       - week: 4
-        perturbations: [high_value_surcharge]
+        perturbations: [high_value_surcharge, young_driver_surcharge]
 
-  - name: two_wave_repricing
+  - name: two_wave_shocks
     label: "Young-driver surcharge (week 3) then area repricing (week 7)"
     tariff_changes:
       - week: 3
