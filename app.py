@@ -295,6 +295,11 @@ with st.sidebar:
         f"**Simulations:** {len(all_sims)}"
     )
 
+    st.divider()
+    st.caption(
+        "Based on a synthetic Spanish motor portfolio. "
+        "Strategy rankings may differ with your own data, tariff structure, and budget."
+    )
 
 # ── Guard: need at least one strategy ─────────────────────────────────────────
 
