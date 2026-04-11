@@ -159,10 +159,11 @@ def convergence_figure(
     return fig
 
 
-def summary_table(df: pd.DataFrame, strategies: list[str]) -> pd.DataFrame:
-    """Final-week metrics for each strategy, formatted for display."""
-    max_week = df["week"].max()
-    final = df[df["week"] == max_week].copy()
+def summary_table(df: pd.DataFrame, strategies: list[str], week: int | None = None) -> pd.DataFrame:
+    """Metrics for each strategy at a given week (defaults to the last week)."""
+    if week is None:
+        week = df["week"].max()
+    final = df[df["week"] == week].copy()
     final = final[final["strategy"].isin(strategies)]
     cols       = ["n_labeled", "rmse", "rel_rmse"]
     col_labels = ["Labeled profiles", "RMSE (€)", "Relative RMSE"]
@@ -404,30 +405,50 @@ with tab1:
 
     # ── Segment composition heatmap ───────────────────────────────────────────
     seg_cols_t1 = [f"rmse_{seg.key}" for seg in SEGMENTS]
-    if all(c in df_t1.columns for c in seg_cols_t1):
-        st.subheader(
-            "Segment RMSE heatmap",
-            help=(
-                "RMSE broken down by actuarial segment for a chosen week. "
-                "Red = high error, green = low error. "
-                "Use the slider to scrub through time and see how each strategy's "
-                "error shifts across segments — greedy strategies tend to fix one "
-                "segment at the cost of starving others."
-            ),
+    has_segs_t1 = all(c in df_t1.columns for c in seg_cols_t1)
+    st.subheader(
+        "Segment breakdown",
+        help=(
+            "RMSE broken down by actuarial segment for a chosen week. "
+            "Red = high error, green = low error. "
+            "Use the slider to scrub through time and see how each strategy's "
+            "error shifts across segments — greedy strategies tend to fix one "
+            "segment at the cost of starving others.\n\n"
+            "Only available for RMSE; per-segment data is not stored for other metrics."
+        ),
+    )
+    if metric_col_t1 != "rmse":
+        st.info(
+            "Segment breakdown is only available for the RMSE metric. "
+            "Switch the metric selector above to RMSE to enable it.",
+            icon="ℹ️",
         )
-        all_weeks   = sorted(df_t1["week"].unique().tolist())
+    elif not has_segs_t1:
+        st.info(
+            "Segment metrics not found — re-run `notebooks/05_al_simulation.py`.",
+            icon="ℹ️",
+        )
+    else:
+        all_weeks_heatmap = sorted(df_t1["week"].unique().tolist())
         heatmap_week = st.select_slider(
             "Week",
-            options=all_weeks,
-            value=all_weeks[-1],
+            options=all_weeks_heatmap,
+            value=all_weeks_heatmap[-1],
             key="heatmap_week_t1",
         )
         fig_heatmap = segment_heatmap(df_t1, heatmap_week, selected_strategies, plotly_theme="plotly_dark")
         st.plotly_chart(fig_heatmap, width="stretch")
 
     # ── Summary table ─────────────────────────────────────────────────────────
-    st.subheader(f"Final-week summary (week {n_weeks})")
-    tbl = summary_table(df_t1, selected_strategies)
+    st.subheader("Summary")
+    all_weeks_t1 = sorted(df_t1["week"].unique().tolist())
+    summary_week_t1 = st.selectbox(
+        "Week",
+        options=all_weeks_t1,
+        index=len(all_weeks_t1) - 1,
+        key="summary_week_t1",
+    )
+    tbl = summary_table(df_t1, selected_strategies, week=summary_week_t1)
     st.dataframe(
         tbl.style.format({
             "Labeled profiles": "{:,.0f}",
@@ -504,10 +525,16 @@ with tab2:
             )
             st.plotly_chart(fig, width="stretch")
 
-        st.subheader(f"Final-week segment RMSE (week {n_weeks})")
-        max_week  = df_t2["week"].max()
+        st.subheader("Segment RMSE summary")
+        all_weeks_t2 = sorted(df_t2["week"].unique().tolist())
+        summary_week_t2 = st.selectbox(
+            "Week",
+            options=all_weeks_t2,
+            index=len(all_weeks_t2) - 1,
+            key="summary_week_t2",
+        )
         final_seg = (
-            df_t2[df_t2["week"] == max_week]
+            df_t2[df_t2["week"] == summary_week_t2]
             .set_index("strategy_label")[seg_cols]
         )
         final_seg.columns = [seg.label for seg in SEGMENTS]
