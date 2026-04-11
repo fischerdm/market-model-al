@@ -250,14 +250,23 @@ with st.sidebar:
     n_weeks = df_all["week"].max()
 
     st.subheader("Strategies")
-    base_strategies = [s for s in STRATEGY_LABELS if not s.endswith("_restart")]
+    base_strategies    = [s for s in STRATEGY_LABELS if not s.endswith("_restart")]
+    restart_strategies = [s for s in STRATEGY_LABELS if s.endswith("_restart")]
+
     selected_base = [
         s for s in base_strategies
         if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}")
     ]
-    selected_strategies = selected_base + [
-        f"{s}_restart" for s in ["random", "segment_adaptive"] if s in selected_base
+
+    st.caption("Restart variants")
+    # Only show restart variants that exist in the results
+    available_restarts = [s for s in restart_strategies if s in df_all["strategy"].unique()]
+    selected_restarts = [
+        s for s in available_restarts
+        if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}")
     ]
+
+    selected_strategies = selected_base + selected_restarts
 
     st.subheader("About")
     n_rows = df_all["n_labeled"].max()
