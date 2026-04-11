@@ -14,6 +14,7 @@ data/processed/
 outputs/**
 !outputs/**/
 !outputs/**/.gitkeep
+!outputs/al_results/results.parquet
 
 # Jupyter
 .ipynb_checkpoints/
