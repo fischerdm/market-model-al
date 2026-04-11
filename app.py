@@ -312,7 +312,8 @@ with st.sidebar:
 
     st.divider()
     st.caption(
-        "Based on a synthetic Spanish motor portfolio. "
+        "Based on a real Spanish motor portfolio "
+        "([doi: 10.17632/5cxyb5fp4f.2](https://data.mendeley.com/datasets/5cxyb5fp4f/2)). "
         "Strategy rankings may differ with your own data, tariff structure, and budget."
     )
     st.caption("David Fischer · April 2026")
