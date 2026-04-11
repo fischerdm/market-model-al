@@ -243,8 +243,11 @@ st.set_page_config(
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.title("AL simulation")
-    st.caption("Competitor model active learning — strategy explorer")
+    st.title("Competitor Tariff Recovery — Active Learning Strategy Evaluator")
+    st.markdown(
+        "<p style='font-size:0.95rem; color: grey;'>Random scraping is harder to beat than you'd think. Explore why — and when it isn't.</p>",
+        unsafe_allow_html=True,
+    )
 
     if not RESULTS_PATH.exists():
         st.error(
