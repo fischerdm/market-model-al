@@ -87,3 +87,30 @@ def segment_rmse(
         else:
             results[seg.key] = float(np.sqrt(residuals_sq[mask].mean()))
     return results
+
+
+def segment_rel_rmse(
+    holdout_X: pd.DataFrame,
+    holdout_y: np.ndarray,
+    preds: np.ndarray,
+) -> dict[str, float]:
+    """Compute relative RMSE for each segment on the holdout set.
+
+    Relative RMSE is RMSE / mean(holdout_y within segment), consistent with
+    how the global rel_rmse is computed (RMSE / global mean premium).
+
+    Returns
+    -------
+    dict mapping segment key -> relative RMSE (NaN if the segment is empty).
+    """
+    results = {}
+    residuals_sq = (holdout_y - preds) ** 2
+    for seg in SEGMENTS:
+        mask = seg.filter_fn(holdout_X).values
+        if mask.sum() == 0:
+            results[seg.key] = float("nan")
+        else:
+            seg_rmse = float(np.sqrt(residuals_sq[mask].mean()))
+            seg_mean = float(holdout_y[mask].mean())
+            results[seg.key] = seg_rmse / seg_mean if seg_mean > 0 else float("nan")
+    return results
