@@ -19,6 +19,12 @@ strategies:
   - error_based
   - segment_adaptive
   - disruption
+  # Gaussian-perturbation variants: same anchor selection, joint profile generator.
+  - random_gauss
+  - uncertainty_gauss
+  - error_based_gauss
+  - segment_adaptive_gauss
+  - disruption_gauss
 
 # ── Metrics ─────────────────────────────────────────────────────────────────
 # Controls which convergence metrics are computed each week.
@@ -114,3 +120,8 @@ advanced:
   #                 higher generation cost).  Does not affect the warm start.
   random_market:
     n_cp_anchors: 50
+
+  # Gaussian-perturbation strategies (*_gauss): noise width as a fraction of
+  # each continuous feature's range.  0.3 → σ ≈ 30 % of range per feature,
+  # keeping profiles near the anchor while varying all features jointly.
+  gaussian_sigma_frac: 0.3

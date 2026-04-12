@@ -16,7 +16,7 @@ Usage
     # sim_cfg keys:
     #   n_weeks, weekly_budget, candidate_multiplier, seed,
     #   strategies, metrics, compute_shap_similarity, restart_strategies,
-    #   market_cp_ratio, random_market_n_cp_anchors
+    #   market_cp_ratio, random_market_n_cp_anchors, gaussian_sigma_frac
 
     # simulations: list of dicts with keys:
     #   name, label, has_tariff_changes,
@@ -63,6 +63,8 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
 
     rm = advanced.get("random_market") or {}
     cfg["random_market_n_cp_anchors"] = int(rm.get("n_cp_anchors", 50))
+
+    cfg["gaussian_sigma_frac"] = float(advanced.get("gaussian_sigma_frac", 0.3))
 
     metrics = set(raw.get("metrics", list(_VALID_METRICS)))
     unknown = metrics - _VALID_METRICS
