@@ -14,6 +14,7 @@ seed: 42
 
 strategies:
   - random
+  - random_market
   - uncertainty
   - error_based
   - segment_adaptive
@@ -92,3 +93,14 @@ simulations:
 
 advanced:
   candidate_multiplier: 10
+
+  # random_market strategy: stratified sampling from the simulated market space.
+  # n_cp_anchors : anchors used to generate the CP pool each week
+  #                (more = broader coverage, higher generation cost)
+  # cp_ratio     : fraction of weekly_budget drawn from the CP pool;
+  #                remainder drawn from the real anchor pool.
+  #                Reflects how much the competitor's portfolio under-covers
+  #                the aggregator space (0.10 = 10 % CP, 90 % real rows).
+  random_market:
+    n_cp_anchors: 50
+    cp_ratio: 0.10
