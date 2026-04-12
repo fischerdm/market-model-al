@@ -109,6 +109,13 @@ else:
 warm_start_X = pd.concat([real_sample, cp_sample], ignore_index=True)
 warm_start_y = np.concatenate([real_y, cp_y])
 
+# pd.concat with mismatched CategoricalDtype levels (real rows vs CP profiles)
+# silently downcasts category columns to object.  Re-cast explicitly so the
+# warm start has correct dtypes — otherwise CompetitorModel._prepare() pays an
+# expensive astype("category") on the full labeled set at every fit/predict call.
+for col in real_sample.select_dtypes("category").columns:
+    warm_start_X[col] = warm_start_X[col].astype("category")
+
 print(f"Warm start combined: {len(warm_start_X):,} profiles")
 print(f"  Real rows  : {len(real_sample):,}  ({100*len(real_sample)/len(warm_start_X):.1f} %)")
 print(f"  CP profiles: {len(cp_sample):,}  ({100*len(cp_sample)/len(warm_start_X):.1f} %)\n")
