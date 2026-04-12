@@ -156,7 +156,7 @@ class ALSimulation:
         tariff_changes: list[tuple[int, Any]] | None = None,
         restart_at_tariff_change: bool = False,
         random_market_n_cp_anchors: int = _RANDOM_MARKET_N_CP_ANCHORS,
-        random_market_cp_ratio: float = _RANDOM_MARKET_CP_RATIO,
+        market_cp_ratio: float = _RANDOM_MARKET_CP_RATIO,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -194,11 +194,12 @@ class ALSimulation:
             (random_market only) Number of random anchors from which CP profiles
             are generated each week.  More anchors → broader CP coverage of the
             aggregator space, but higher generation cost.
-        random_market_cp_ratio : float
-            (random_market only) Fraction of weekly_budget drawn from the CP
-            pool; the remainder is drawn from the real anchor pool.  Represents
-            the degree to which the competitor's portfolio under-covers the
-            aggregator space.  E.g. 0.10 → 10 % CP profiles, 90 % real rows.
+        market_cp_ratio : float
+            Fraction of weekly_budget drawn from the CP pool (random_market
+            strategy only); the remainder is drawn from the real anchor pool.
+            Represents the degree to which the competitor's portfolio
+            under-covers the aggregator space.  Should match the value used to
+            build the warm start.  E.g. 0.10 → 10 % CP profiles, 90 % real rows.
 
         Returns
         -------
@@ -234,11 +235,11 @@ class ALSimulation:
 
         print(f"Strategy : {strategy}")
         if strategy == "random_market":
-            n_cp = int(weekly_budget * random_market_cp_ratio)
+            n_cp = int(weekly_budget * market_cp_ratio)
             n_real = weekly_budget - n_cp
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
                   f"  n_cp_anchors={random_market_n_cp_anchors}"
-                  f"  cp_ratio={random_market_cp_ratio}  weeks={n_weeks}")
+                  f"  cp_ratio={market_cp_ratio}  weeks={n_weeks}")
             print(f"  per week: {n_cp} from CP pool + {n_real} from real pool")
         else:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
@@ -319,7 +320,7 @@ class ALSimulation:
                 # real anchor pool.  Mirrors aggregator traffic: mostly real
                 # portfolio rows, topped up with synthetic profiles that cover
                 # segments the competitor doesn't write.
-                n_cp_sample   = max(1, int(weekly_budget * random_market_cp_ratio))
+                n_cp_sample   = max(1, int(weekly_budget * market_cp_ratio))
                 n_real_sample = weekly_budget - n_cp_sample
 
                 cp_anchor_idx = rng.choice(

@@ -55,7 +55,7 @@ STRATEGIES_RUN:    list[str] = sim_cfg["strategies"]
 RESTART_STRATS:    list[str] = sim_cfg["restart_strategies"]
 COMPUTE_SHAP:      bool      = sim_cfg["compute_shap_similarity"]
 RM_N_CP_ANCHORS:   int       = sim_cfg["random_market_n_cp_anchors"]
-RM_CP_RATIO:       float     = sim_cfg["random_market_cp_ratio"]
+MARKET_CP_RATIO:   float     = sim_cfg["market_cp_ratio"]
 
 print("Simulation config:")
 print(f"  n_weeks={N_WEEKS}  weekly_budget={WEEKLY_BUDGET}  "
@@ -64,7 +64,8 @@ print(f"  strategies        : {STRATEGIES_RUN}")
 print(f"  restart_strategies: {RESTART_STRATS}")
 print(f"  metrics           : {sorted(sim_cfg['metrics'])}")
 print(f"  SHAP similarity   : {'enabled' if COMPUTE_SHAP else 'disabled'}")
-print(f"  random_market     : n_cp_anchors={RM_N_CP_ANCHORS}  cp_ratio={RM_CP_RATIO}")
+print(f"  market_cp_ratio   : {MARKET_CP_RATIO}  (warm start + random_market)")
+print(f"  random_market     : n_cp_anchors={RM_N_CP_ANCHORS}")
 print(f"\nSimulations ({len(simulations)}):")
 for s in simulations:
     if s["has_tariff_changes"]:
@@ -136,7 +137,7 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
         tariff_changes=tc_pairs or None,
         restart_at_tariff_change=restart,
         random_market_n_cp_anchors=RM_N_CP_ANCHORS,
-        random_market_cp_ratio=RM_CP_RATIO,
+        market_cp_ratio=MARKET_CP_RATIO,
     )
     df_run["simulation"] = sim_name
     if strategy_label is not None:
