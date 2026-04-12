@@ -333,8 +333,6 @@ class ALSimulation:
                     validate=True,
                 )
 
-                real_pool = self._real_X.iloc[self._anchor_pool_idx].reset_index(drop=True)
-
                 # Draw from CP pool (replace=True if pool smaller than budget slice)
                 if len(cp_profiles) > 0:
                     cp_sample_idx = rng.choice(
@@ -346,8 +344,10 @@ class ALSimulation:
                 else:
                     cp_sample = cp_profiles  # empty
 
-                real_sample_idx = rng.choice(len(real_pool), size=n_real_sample, replace=False)
-                real_sample = real_pool.iloc[real_sample_idx]
+                # Sample real rows directly from anchor_pool_idx — avoids
+                # materialising the full ~100k-row pool as an intermediate DataFrame.
+                real_idx = rng.choice(self._anchor_pool_idx, size=n_real_sample, replace=False)
+                real_sample = self._real_X.iloc[real_idx].reset_index(drop=True)
 
                 profiles = pd.concat([cp_sample, real_sample], ignore_index=True)
                 if len(profiles) == 0:
