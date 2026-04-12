@@ -248,6 +248,20 @@ st.set_page_config(
     page_title="AL Competitor Model",
     layout="wide",
     initial_sidebar_state="expanded",
+    menu_items={
+        "About": (
+            "An insurer scraping competitor quotes from an aggregator website can't afford to "
+            "scrape everything — it has to choose *what* to request. This app explores that "
+            "choice using active learning (AL): a simulated competitor model is retrained each "
+            "week on oracle-labeled ceteris-paribus profiles, and five query strategies compete "
+            "to recover the competitor's tariff as fast as possible.\n\n"
+            "The oracle is a LightGBM model trained on a real Spanish motor vehicle portfolio "
+            "([Mendeley Data, doi: 10.17632/5cxyb5fp4f.2](https://data.mendeley.com/datasets/5cxyb5fp4f/2)). "
+            "Strategies are evaluated on holdout RMSE, per-segment RMSE, and SHAP cosine similarity.\n\n"
+            "Built with Streamlit, LightGBM, SHAP, and Plotly.  \n"
+            "David Fischer · April 2026"
+        ),
+    },
 )
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
@@ -258,7 +272,7 @@ with st.sidebar:
         "<p style='font-size:0.95rem; color: grey;'>"
         "Simulate how an insurer reverse-engineers a competitor's tariff by scraping quotes "
         "from an aggregator — and test which active learning strategy gets there fastest. "
-        "Random scraping is harder to beat than you'd think. "
+        "A strategy where anchors for ceteris-paribus perturbations are randomly selected is harder to beat than you'd think. "
         "Explore why — and when it isn't — with this configurable app."
         "</p>",
         unsafe_allow_html=True,
