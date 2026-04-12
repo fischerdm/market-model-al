@@ -57,7 +57,12 @@ import shap
 from sklearn.metrics import mean_squared_error
 
 from market_model_al.competitor_model import CompetitorModel
-from market_model_al.profile_generator import generate_ceteris_paribus, PROFILES_PER_ANCHOR
+from market_model_al.profile_generator import (
+    generate_ceteris_paribus,
+    generate_gaussian_profiles,
+    PROFILES_PER_ANCHOR,
+    GAUSSIAN_PROFILES_PER_ANCHOR,
+)
 from market_model_al.segments import segment_rmse, segment_rel_rmse
 from market_model_al.strategies import (
     STRATEGIES,
@@ -157,6 +162,7 @@ class ALSimulation:
         restart_at_tariff_change: bool = False,
         random_market_n_cp_anchors: int = _RANDOM_MARKET_N_CP_ANCHORS,
         market_cp_ratio: float = _RANDOM_MARKET_CP_RATIO,
+        gaussian_sigma_frac: float = 0.3,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -200,6 +206,10 @@ class ALSimulation:
             Represents the degree to which the competitor's portfolio
             under-covers the aggregator space.  Should match the value used to
             build the warm start.  E.g. 0.10 → 10 % CP profiles, 90 % real rows.
+        gaussian_sigma_frac : float
+            Noise width for ``*_gauss`` strategies, expressed as a fraction of
+            each feature's range.  E.g. 0.3 → σ ≈ 30 % of range per feature.
+            Has no effect on non-Gaussian strategies.
 
         Returns
         -------
@@ -211,11 +221,17 @@ class ALSimulation:
         if strategy not in STRATEGIES:
             raise ValueError(f"Unknown strategy '{strategy}'.  Choose from {STRATEGIES}.")
 
+        # Gaussian strategies share the same selection logic as their CP counterparts;
+        # only the profile generator differs.  Strip the suffix for dispatch.
+        is_gauss     = strategy.endswith("_gauss")
+        base_strategy = strategy[:-6] if is_gauss else strategy  # "_gauss" is 6 chars
+
         # Sort change events by week and build a fast lookup set
         tc_schedule: list[tuple[int, Any]] = sorted(tariff_changes or [], key=lambda x: x[0])
         tc_weeks = {w for w, _ in tc_schedule}
 
-        n_anchors    = max(1, weekly_budget // PROFILES_PER_ANCHOR)
+        ppa          = GAUSSIAN_PROFILES_PER_ANCHOR if is_gauss else PROFILES_PER_ANCHOR
+        n_anchors    = max(1, weekly_budget // ppa)
         n_candidates = n_anchors * candidate_multiplier
 
         rng = np.random.default_rng(int(self._master_rng.integers(0, 2**31)))
@@ -241,6 +257,10 @@ class ALSimulation:
                   f"  n_cp_anchors={random_market_n_cp_anchors}"
                   f"  cp_ratio={market_cp_ratio}  weeks={n_weeks}")
             print(f"  per week: {n_cp} from CP pool + {n_real} from real pool")
+        elif is_gauss:
+            print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
+                  f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}"
+                  f"  sigma_frac={gaussian_sigma_frac}  weeks={n_weeks}")
         else:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
                   f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}  weeks={n_weeks}")
@@ -354,18 +374,27 @@ class ALSimulation:
                     continue
 
             else:
-                # ── CP-anchor strategies ──────────────────────────────────────
+                # ── CP-anchor and Gaussian strategies ─────────────────────────
                 cand_idx = rng.choice(self._anchor_pool_idx, size=n_candidates, replace=False)
                 candidate_anchors = self._real_X.iloc[cand_idx].reset_index(drop=True)
 
                 chosen_local = self._apply_strategy(
-                    strategy, competitor, labeled_X, labeled_y,
+                    base_strategy, competitor, labeled_X, labeled_y,
                     candidate_anchors, n_anchors, rng,
                     prev_seg_rmses=prev_seg_rmses,
                 )
                 selected_anchors = candidate_anchors.iloc[chosen_local]
 
-                profiles = generate_ceteris_paribus(selected_anchors, validate=True)
+                if is_gauss:
+                    profiles = generate_gaussian_profiles(
+                        selected_anchors,
+                        n_per_anchor=ppa,
+                        sigma_frac=gaussian_sigma_frac,
+                        rng=rng,
+                        validate=True,
+                    )
+                else:
+                    profiles = generate_ceteris_paribus(selected_anchors, validate=True)
                 if len(profiles) == 0:
                     continue
 
