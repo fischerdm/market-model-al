@@ -92,6 +92,12 @@ simulations:
 #   Has no effect on the 'random' strategy.
 
 advanced:
+  # candidate_multiplier: informativeness strategies score
+  #   (n_anchors × candidate_multiplier) candidates per week and keep the top
+  #   n_anchors.  A higher value expands the selection space and improves
+  #   selection quality at the cost of slower scoring.
+  #   Only relevant for: uncertainty, error_based, segment_adaptive, disruption.
+  #   Has no effect on: random, random_market.
   candidate_multiplier: 10
 
   # Market composition assumption: fraction of aggregator traffic not covered
