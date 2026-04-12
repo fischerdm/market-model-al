@@ -27,6 +27,7 @@ The **weekly AL loop** generates fresh CP candidate profiles each week and uses 
 | AL strategy | Query criterion | Deployable in practice? |
 |---|---|---|
 | Random | Uniform random baseline — no model required | Yes |
+| Random market | Stratified sample from real portfolio rows + market-augmenting CP profiles; split controlled by `market_cp_ratio` | Yes |
 | Uncertainty | Anchors where bootstrap prediction variance is highest | Yes |
 | Error-based | Anchors with highest expected relative residual (proxy model on labeled data) | Yes |
 | Segment-adaptive | Anchors scored by global + per-segment relative RMSE; converges toward random as gaps close | Yes |
@@ -46,7 +47,8 @@ Strategies operate on **anchor selection**: each week a pool of real anchor rows
 
 | Finding | Detail |
 |---|---|
-| **Random beats sophisticated strategies globally** | On a population-representative holdout, random anchor sampling is competitive with or better than all informativeness-based strategies at 10 weeks. |
+| **Random market outperforms all CP-based strategies** | Labeling real portfolio rows and market-augmenting CP profiles produces training data with natural feature correlations — LightGBM learns interaction effects far more efficiently from these than from CP sweeps, which vary one feature at a time. This challenges the assumption that systematic ceteris-paribus profiling is the optimal data collection strategy for competitor model building. |
+| **Random beats sophisticated CP strategies globally** | Among CP-based strategies, random anchor sampling matches or outperforms all informativeness-based strategies on global RMSE and SHAP cosine similarity at 10 weeks. |
 | **Error-based recovers young drivers faster** | Segment-level RMSE reveals that `error_based` converges faster than random on young drivers (age < 30) — the one segment where a sophisticated strategy wins. |
 | **Root cause: informativeness vs. representativeness** | Greedy informativeness strategies pull budget toward high-signal edge cases, starving mainstream segments that random covers proportionally. |
 | **Restart is not always optimal** | After a targeted tariff change (young-driver surcharge), a full restart discards valid labels from unchanged segments. The continuous strategy retains that data and can outperform restart on global RMSE. |

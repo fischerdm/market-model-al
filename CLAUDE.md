@@ -69,6 +69,7 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    - Root cause: greedy informativeness strategies are not representative — they starve mainstream segments of scraping budget
    - Full restart after a targeted tariff change (young-driver surcharge) is not always optimal: it discards valid labels from unchanged segments and can end up with higher global RMSE at week 10 than continuous scraping
    - `disruption` is the principled response: targets only disrupted segments without discarding any labels
+   - **`random_market` clearly outperforms all CP-based strategies**: real portfolio rows and market-augmenting CP rows are genuine multivariate profiles with natural feature correlations — LightGBM learns interaction effects far more efficiently from these than from CP sweeps (which vary one feature at a time). This challenges the assumption that systematic ceteris-paribus profiling is the optimal data collection strategy for competitor model building.
 
 ### No copula / generative model
 The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly. Drawing from real data is simpler and more principled — those profiles represent the true feature distribution by definition.
