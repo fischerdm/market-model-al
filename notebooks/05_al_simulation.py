@@ -56,6 +56,7 @@ RESTART_STRATS:    list[str] = sim_cfg["restart_strategies"]
 COMPUTE_SHAP:      bool      = sim_cfg["compute_shap_similarity"]
 RM_N_CP_ANCHORS:   int       = sim_cfg["random_market_n_cp_anchors"]
 MARKET_CP_RATIO:   float     = sim_cfg["market_cp_ratio"]
+GAUSSIAN_SIGMA:    float     = sim_cfg["gaussian_sigma_frac"]
 
 print("Simulation config:")
 print(f"  n_weeks={N_WEEKS}  weekly_budget={WEEKLY_BUDGET}  "
@@ -66,6 +67,7 @@ print(f"  metrics           : {sorted(sim_cfg['metrics'])}")
 print(f"  SHAP similarity   : {'enabled' if COMPUTE_SHAP else 'disabled'}")
 print(f"  market_cp_ratio   : {MARKET_CP_RATIO}  (warm start + random_market)")
 print(f"  random_market     : n_cp_anchors={RM_N_CP_ANCHORS}")
+print(f"  gaussian_sigma    : {GAUSSIAN_SIGMA}")
 print(f"\nSimulations ({len(simulations)}):")
 for s in simulations:
     if s["has_tariff_changes"]:
@@ -84,15 +86,21 @@ for d in [RESULTS_DIR, FIGURES_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 PALETTE = {
-    "random":                   "#888888",
-    "random_market":            "#17becf",
-    "uncertainty":              "#1f77b4",
-    "error_based":              "#ff7f0e",
-    "segment_adaptive":         "#9467bd",
-    "disruption":               "#2ca02c",
-    "random_restart":           "#bbbbbb",
-    "segment_adaptive_restart": "#c5b0d5",
-    "disruption_restart":       "#98df8a",
+    "random":                    "#888888",
+    "random_market":             "#17becf",
+    "uncertainty":               "#1f77b4",
+    "error_based":               "#ff7f0e",
+    "segment_adaptive":          "#9467bd",
+    "disruption":                "#2ca02c",
+    "random_restart":            "#bbbbbb",
+    "segment_adaptive_restart":  "#c5b0d5",
+    "disruption_restart":        "#98df8a",
+    # Gaussian variants — lighter/dashed versions of the CP palette entries
+    "random_gauss":              "#cccccc",
+    "uncertainty_gauss":         "#aec7e8",
+    "error_based_gauss":         "#ffbb78",
+    "segment_adaptive_gauss":    "#c5b0d5",
+    "disruption_gauss":          "#98df8a",
 }
 
 # ── Load warm start ────────────────────────────────────────────────────────────
@@ -138,6 +146,7 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
         restart_at_tariff_change=restart,
         random_market_n_cp_anchors=RM_N_CP_ANCHORS,
         market_cp_ratio=MARKET_CP_RATIO,
+        gaussian_sigma_frac=GAUSSIAN_SIGMA,
     )
     df_run["simulation"] = sim_name
     if strategy_label is not None:
