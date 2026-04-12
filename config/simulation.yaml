@@ -14,6 +14,7 @@ seed: 42
 
 strategies:
   - random
+  - random_market
   - uncertainty
   - error_based
   - segment_adaptive
@@ -91,4 +92,25 @@ simulations:
 #   Has no effect on the 'random' strategy.
 
 advanced:
+  # candidate_multiplier: informativeness strategies score
+  #   (n_anchors × candidate_multiplier) candidates per week and keep the top
+  #   n_anchors.  A higher value expands the selection space and improves
+  #   selection quality at the cost of slower scoring.
+  #   Only relevant for: uncertainty, error_based, segment_adaptive, disruption.
+  #   Has no effect on: random, random_market.
   candidate_multiplier: 10
+
+  # Market composition assumption: fraction of aggregator traffic not covered
+  # by the competitor's portfolio (i.e. profiles where the competitor quotes
+  # but does not write business).  Applied consistently to:
+  #   - the warm start (notebooks/04_build_warm_start.py)
+  #   - the random_market weekly sampling (al_loop.py)
+  # 0.10 → 10 % CP profiles, 90 % real portfolio rows.
+  market_cp_ratio: 0.10
+
+  # random_market strategy: CP pool diversity.
+  # n_cp_anchors : anchors used to generate the CP pool each week
+  #                (more = broader coverage of the aggregator space,
+  #                 higher generation cost).  Does not affect the warm start.
+  random_market:
+    n_cp_anchors: 50

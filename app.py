@@ -27,6 +27,7 @@ from market_model_al.segments import SEGMENTS  # noqa: E402 — needs sys.path f
 
 STRATEGY_LABELS = {
     "random":                     "Random",
+    "random_market":              "Random market",
     "uncertainty":                "Uncertainty",
     "error_based":                "Error-based",
     "segment_adaptive":           "Segment-adaptive",
@@ -37,6 +38,7 @@ STRATEGY_LABELS = {
 
 PALETTE = {
     "random":                     "#888888",
+    "random_market":              "#17becf",
     "uncertainty":                "#1f77b4",
     "error_based":                "#ff7f0e",
     "segment_adaptive":           "#9467bd",
@@ -253,7 +255,7 @@ st.set_page_config(
             "An insurer scraping competitor quotes from an aggregator website can't afford to "
             "scrape everything — it has to choose *what* to request. This app explores that "
             "choice using active learning (AL): a simulated competitor model is retrained each "
-            "week on oracle-labeled ceteris-paribus profiles, and five query strategies compete "
+            "week on oracle-labeled ceteris-paribus profiles, and six query strategies compete "
             "to recover the competitor's tariff as fast as possible.\n\n"
             "The oracle is a LightGBM model trained on a real Spanish motor vehicle portfolio "
             "([Mendeley Data, doi: 10.17632/5cxyb5fp4f.2](https://data.mendeley.com/datasets/5cxyb5fp4f/2)). "
@@ -558,9 +560,9 @@ with tab2:
 with tab3:
     st.header("Strategy guide")
     st.caption(
-        "How each strategy selects which anchor rows to scrape each week. "
-        "All strategies share the same weekly profile budget and the same "
-        "ceteris-paribus profile generation step — they differ only in *which anchors* they pick."
+        "How each strategy selects which profiles to scrape each week. "
+        "All strategies share the same weekly profile budget — they differ in "
+        "which anchors they pick and how the budget is split across the market space."
     )
 
     st.info(
@@ -590,6 +592,33 @@ with tab3:
                 "Budget is spread evenly even when some segments are well-understood and others are not.",
             ],
             "when": "Strong general-purpose baseline. Hard to beat on global RMSE and SHAP similarity because it never sacrifices representativeness.",
+        },
+        {
+            "name": "Random market",
+            "key": "random_market",
+            "summary": "Samples each week from a combined pool of real portfolio rows and ceteris-paribus profiles, weighted by the assumed market coverage ratio.",
+            "detail": (
+                "The competitor's portfolio does not fully represent aggregator traffic — "
+                "there are segments where the competitor quotes but rarely writes business. "
+                "This strategy models that gap explicitly: each week it generates a CP pool "
+                "from a small number of random anchors, then draws a fixed fraction of the "
+                "weekly budget from that pool (default 10 %) and the remainder from the real "
+                "portfolio rows. The split is controlled by `market_cp_ratio` in `simulation.yaml` "
+                "and is applied consistently to the warm start as well, so the two phases share "
+                "the same market composition assumption."
+            ),
+            "strengths": [
+                "Represents the true market space — not just the competitor's written portfolio.",
+                "Consistent with the warm start: both use the same `market_cp_ratio`.",
+                "No informativeness scoring required — fast and simple like random.",
+                "The CP ratio and anchor count are independently configurable.",
+            ],
+            "weaknesses": [
+                "CP pool generation adds overhead compared to pure random sampling.",
+                "The market_cp_ratio is a modelling assumption that must be set externally.",
+                "Like random, it ignores where the competitor model is currently wrong.",
+            ],
+            "when": "Use as the primary benchmark when the competitor's portfolio is known to be selective — i.e. when pure random from the portfolio would under-represent segments the competitor prices but doesn't write.",
         },
         {
             "name": "Uncertainty",

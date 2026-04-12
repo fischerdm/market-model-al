@@ -68,6 +68,10 @@ from market_model_al.strategies import (
     disruption_query,
 )
 
+# Default random_market hyperparameters (overridable via run())
+_RANDOM_MARKET_N_CP_ANCHORS = 50
+_RANDOM_MARKET_CP_RATIO     = 0.10
+
 
 _HOLDOUT_N = 5_000   # fixed holdout size, carved from real_X at construction time
 
@@ -151,6 +155,8 @@ class ALSimulation:
         candidate_multiplier: int = 10,
         tariff_changes: list[tuple[int, Any]] | None = None,
         restart_at_tariff_change: bool = False,
+        random_market_n_cp_anchors: int = _RANDOM_MARKET_N_CP_ANCHORS,
+        market_cp_ratio: float = _RANDOM_MARKET_CP_RATIO,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -184,6 +190,16 @@ class ALSimulation:
             week's evaluation.  The model re-learns from scratch using only
             profiles labeled by the new oracle.  Applied at *every* change week,
             not just the first.
+        random_market_n_cp_anchors : int
+            (random_market only) Number of random anchors from which CP profiles
+            are generated each week.  More anchors → broader CP coverage of the
+            aggregator space, but higher generation cost.
+        market_cp_ratio : float
+            Fraction of weekly_budget drawn from the CP pool (random_market
+            strategy only); the remainder is drawn from the real anchor pool.
+            Represents the degree to which the competitor's portfolio
+            under-covers the aggregator space.  Should match the value used to
+            build the warm start.  E.g. 0.10 → 10 % CP profiles, 90 % real rows.
 
         Returns
         -------
@@ -218,8 +234,16 @@ class ALSimulation:
         prev_seg_rmses: dict[str, float] | None = None   # for disruption_query
 
         print(f"Strategy : {strategy}")
-        print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
-              f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}  weeks={n_weeks}")
+        if strategy == "random_market":
+            n_cp = int(weekly_budget * market_cp_ratio)
+            n_real = weekly_budget - n_cp
+            print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
+                  f"  n_cp_anchors={random_market_n_cp_anchors}"
+                  f"  cp_ratio={market_cp_ratio}  weeks={n_weeks}")
+            print(f"  per week: {n_cp} from CP pool + {n_real} from real pool")
+        else:
+            print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
+                  f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}  weeks={n_weeks}")
         if tc_schedule:
             changes_str = ", ".join(f"week {w}" for w, _ in tc_schedule)
             print(f"  tariff changes at: {changes_str}"
@@ -289,22 +313,61 @@ class ALSimulation:
                 print(f"  [week {week}] Restart — labeled set cleared, "
                       "re-learning from new oracle only.", flush=True)
 
-            # ── Sample candidate anchor pool ──────────────────────────────────
-            cand_idx = rng.choice(self._anchor_pool_idx, size=n_candidates, replace=False)
-            candidate_anchors = self._real_X.iloc[cand_idx].reset_index(drop=True)
+            if strategy == "random_market":
+                # ── random_market: stratified sampling from market space ──────
+                # Build CP pool from n_cp_anchors random anchors, then sample
+                # cp_ratio of weekly_budget from it and the remainder from the
+                # real anchor pool.  Mirrors aggregator traffic: mostly real
+                # portfolio rows, topped up with synthetic profiles that cover
+                # segments the competitor doesn't write.
+                n_cp_sample   = max(1, int(weekly_budget * market_cp_ratio))
+                n_real_sample = weekly_budget - n_cp_sample
 
-            # ── Select best anchors via strategy ──────────────────────────────
-            chosen_local = self._apply_strategy(
-                strategy, competitor, labeled_X, labeled_y,
-                candidate_anchors, n_anchors, rng,
-                prev_seg_rmses=prev_seg_rmses,
-            )
-            selected_anchors = candidate_anchors.iloc[chosen_local]
+                cp_anchor_idx = rng.choice(
+                    self._anchor_pool_idx,
+                    size=random_market_n_cp_anchors,
+                    replace=False,
+                )
+                cp_profiles = generate_ceteris_paribus(
+                    self._real_X.iloc[cp_anchor_idx].reset_index(drop=True),
+                    validate=True,
+                )
 
-            # ── Generate all CP profiles from selected anchors ────────────────
-            profiles = generate_ceteris_paribus(selected_anchors, validate=True)
-            if len(profiles) == 0:
-                continue
+                # Draw from CP pool (replace=True if pool smaller than budget slice)
+                if len(cp_profiles) > 0:
+                    cp_sample_idx = rng.choice(
+                        len(cp_profiles),
+                        size=min(n_cp_sample, len(cp_profiles)),
+                        replace=n_cp_sample > len(cp_profiles),
+                    )
+                    cp_sample = cp_profiles.iloc[cp_sample_idx]
+                else:
+                    cp_sample = cp_profiles  # empty
+
+                # Sample real rows directly from anchor_pool_idx — avoids
+                # materialising the full ~100k-row pool as an intermediate DataFrame.
+                real_idx = rng.choice(self._anchor_pool_idx, size=n_real_sample, replace=False)
+                real_sample = self._real_X.iloc[real_idx].reset_index(drop=True)
+
+                profiles = pd.concat([cp_sample, real_sample], ignore_index=True)
+                if len(profiles) == 0:
+                    continue
+
+            else:
+                # ── CP-anchor strategies ──────────────────────────────────────
+                cand_idx = rng.choice(self._anchor_pool_idx, size=n_candidates, replace=False)
+                candidate_anchors = self._real_X.iloc[cand_idx].reset_index(drop=True)
+
+                chosen_local = self._apply_strategy(
+                    strategy, competitor, labeled_X, labeled_y,
+                    candidate_anchors, n_anchors, rng,
+                    prev_seg_rmses=prev_seg_rmses,
+                )
+                selected_anchors = candidate_anchors.iloc[chosen_local]
+
+                profiles = generate_ceteris_paribus(selected_anchors, validate=True)
+                if len(profiles) == 0:
+                    continue
 
             # ── Label with current oracle ─────────────────────────────────────
             labels = current_oracle.query(profiles)

@@ -47,13 +47,15 @@ sim_cfg    = load_simulation_cfg(ROOT / "config" / "simulation.yaml")
 tc_library = load_tariff_changes_cfg(ROOT / "config" / "tariff_changes.yaml")
 simulations = resolve_simulations(sim_cfg, tc_library)
 
-N_WEEKS:        int       = sim_cfg["n_weeks"]
-WEEKLY_BUDGET:  int       = sim_cfg["weekly_budget"]
-CANDIDATE_MULT: int       = sim_cfg["candidate_multiplier"]
-SEED:           int       = sim_cfg["seed"]
-STRATEGIES_RUN: list[str] = sim_cfg["strategies"]
-RESTART_STRATS: list[str] = sim_cfg["restart_strategies"]
-COMPUTE_SHAP:   bool      = sim_cfg["compute_shap_similarity"]
+N_WEEKS:           int       = sim_cfg["n_weeks"]
+WEEKLY_BUDGET:     int       = sim_cfg["weekly_budget"]
+CANDIDATE_MULT:    int       = sim_cfg["candidate_multiplier"]
+SEED:              int       = sim_cfg["seed"]
+STRATEGIES_RUN:    list[str] = sim_cfg["strategies"]
+RESTART_STRATS:    list[str] = sim_cfg["restart_strategies"]
+COMPUTE_SHAP:      bool      = sim_cfg["compute_shap_similarity"]
+RM_N_CP_ANCHORS:   int       = sim_cfg["random_market_n_cp_anchors"]
+MARKET_CP_RATIO:   float     = sim_cfg["market_cp_ratio"]
 
 print("Simulation config:")
 print(f"  n_weeks={N_WEEKS}  weekly_budget={WEEKLY_BUDGET}  "
@@ -62,6 +64,8 @@ print(f"  strategies        : {STRATEGIES_RUN}")
 print(f"  restart_strategies: {RESTART_STRATS}")
 print(f"  metrics           : {sorted(sim_cfg['metrics'])}")
 print(f"  SHAP similarity   : {'enabled' if COMPUTE_SHAP else 'disabled'}")
+print(f"  market_cp_ratio   : {MARKET_CP_RATIO}  (warm start + random_market)")
+print(f"  random_market     : n_cp_anchors={RM_N_CP_ANCHORS}")
 print(f"\nSimulations ({len(simulations)}):")
 for s in simulations:
     if s["has_tariff_changes"]:
@@ -81,6 +85,7 @@ for d in [RESULTS_DIR, FIGURES_DIR]:
 
 PALETTE = {
     "random":                   "#888888",
+    "random_market":            "#17becf",
     "uncertainty":              "#1f77b4",
     "error_based":              "#ff7f0e",
     "segment_adaptive":         "#9467bd",
@@ -131,6 +136,8 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
         n_weeks=N_WEEKS,
         tariff_changes=tc_pairs or None,
         restart_at_tariff_change=restart,
+        random_market_n_cp_anchors=RM_N_CP_ANCHORS,
+        market_cp_ratio=MARKET_CP_RATIO,
     )
     df_run["simulation"] = sim_name
     if strategy_label is not None:

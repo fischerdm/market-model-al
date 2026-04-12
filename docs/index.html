@@ -272,7 +272,7 @@
   <p class="byline">David Fischer · 2026</p>
   <div class="badge-row">
     <span class="badge">Python 3.12 · LightGBM · SHAP</span>
-    <span class="badge">Active Learning</span>
+    <span class="badge">Active Learning · 6 strategies</span>
     <span class="badge">Streamlit Dashboard</span>
     <span class="badge">Motor Insurance · 105 K policies</span>
     <span class="badge">Lledó &amp; Pavía (2024)</span>
@@ -387,6 +387,7 @@
         </thead>
         <tbody>
           <tr><td>Random</td><td>Uniform random baseline — no model required</td></tr>
+          <tr><td>Random market</td><td>Stratified sample from real portfolio rows (90 %) and market-augmenting CP profiles (10 %); split reflects the assumed portfolio coverage of aggregator traffic</td></tr>
           <tr><td>Uncertainty</td><td>Anchors with highest bootstrap prediction variance across ensemble members</td></tr>
           <tr><td>Error-based</td><td>Anchors with highest expected relative error, estimated by a proxy model trained on labeled residuals</td></tr>
           <tr><td>Segment-adaptive</td><td>Anchors scored by global + per-segment relative RMSE on the labeled set; converges toward random as segment gaps close</td></tr>
@@ -512,7 +513,7 @@
     <h2>Active learning results</h2>
 
     <p>
-      Simulation run: <strong>10 weeks · 5 000 profiles/week · 5 strategies</strong>.
+      Simulation run: <strong>10 weeks · 5 000 profiles/week · 6 strategies</strong>.
       Strategies operate on <em>anchor selection</em>: each week a pool of real data rows
       is scored, the best anchors are selected, and all their ceteris-paribus profiles are
       generated and labeled. Budget converts to anchors as
@@ -521,10 +522,30 @@
 
     <h3>Global convergence</h3>
 
+    <div class="callout result">
+      <strong>Random market outperforms all CP-based strategies.</strong> Labeling real
+      portfolio rows alongside market-augmenting ceteris-paribus profiles produces training
+      data with natural feature correlations across all variables simultaneously. LightGBM
+      learns interaction effects far more efficiently from these genuine multivariate profiles
+      than from CP sweeps, which vary one feature at a time while holding all others fixed.
+      This challenges the assumption that systematic ceteris-paribus profiling is the optimal
+      data collection strategy for competitor model building.
+    </div>
+
+    <div class="callout insight">
+      <strong>Why: CP profiles are structurally limited.</strong> A CP profile sweeping
+      driver age from 18 to 80 holds Power, vehicle age, and every other feature at a single
+      anchor value. The resulting training data covers marginal tariff curves well but
+      systematically under-represents the multivariate interactions that drive pricing
+      variation. Real observed quotes have no such constraint — they carry the full joint
+      distribution of risk factors.
+    </div>
+
     <div class="callout warn">
-      <strong>Random anchor sampling is competitive.</strong> On a population-representative
-      holdout, uniform random anchor selection matches or outperforms all informativeness-based
-      strategies across 10 weeks on both RMSE and SHAP cosine similarity.
+      <strong>Among CP strategies, random anchor sampling is competitive.</strong> On a
+      population-representative holdout, uniform random anchor selection matches or outperforms
+      all informativeness-based CP strategies across 10 weeks on both RMSE and SHAP cosine
+      similarity.
     </div>
 
     <div class="callout insight">
@@ -534,7 +555,7 @@
       pricing is one of the most sensitive and frequently debated segments in motor insurance.
     </div>
 
-    <h3>Why sophisticated strategies underperform globally</h3>
+    <h3>Why sophisticated CP strategies underperform globally</h3>
     <p>
       Greedy informativeness strategies concentrate scraping budget on high-signal edge
       cases — young drivers, high-powered vehicles, extreme vehicle values — at the expense

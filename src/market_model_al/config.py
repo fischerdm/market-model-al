@@ -15,7 +15,8 @@ Usage
 
     # sim_cfg keys:
     #   n_weeks, weekly_budget, candidate_multiplier, seed,
-    #   strategies, metrics, compute_shap_similarity, restart_strategies
+    #   strategies, metrics, compute_shap_similarity, restart_strategies,
+    #   market_cp_ratio, random_market_n_cp_anchors
 
     # simulations: list of dicts with keys:
     #   name, label, has_tariff_changes,
@@ -57,7 +58,11 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
     cfg["simulations_raw"]     = list(raw.get("simulations") or [])
 
     advanced = raw.get("advanced") or {}
-    cfg["candidate_multiplier"] = int(advanced.get("candidate_multiplier", 10))
+    cfg["candidate_multiplier"]    = int(advanced.get("candidate_multiplier", 10))
+    cfg["market_cp_ratio"]         = float(advanced.get("market_cp_ratio", 0.10))
+
+    rm = advanced.get("random_market") or {}
+    cfg["random_market_n_cp_anchors"] = int(rm.get("n_cp_anchors", 50))
 
     metrics = set(raw.get("metrics", list(_VALID_METRICS)))
     unknown = metrics - _VALID_METRICS
