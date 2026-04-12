@@ -287,4 +287,4 @@ def disruption_query(
 
 # ── registry ──────────────────────────────────────────────────────────────────
 
-STRATEGIES = ["random", "uncertainty", "error_based", "segment_adaptive", "disruption"]
+STRATEGIES = ["random", "random_market", "uncertainty", "error_based", "segment_adaptive", "disruption"]
