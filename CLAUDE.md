@@ -29,60 +29,86 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
 
    **Warm start** seeds the competitor model with ~5,000 real rows (≈ one week's scraping budget), simulating organic quote requests arriving via the aggregator before the systematic AL loop begins. CP profiles in the warm start were removed — they create distribution mismatch and add little value at this warm-start size.
 
-   **Weekly AL loop**:
-   - Each week: sample `n_candidates = candidate_multiplier × n_anchors` anchor rows from the real dataset → apply query strategy to select `n_anchors` → generate ceteris-paribus profiles from selected anchors → label via current oracle → retrain competitor model
-   - `n_anchors = weekly_budget // PROFILES_PER_ANCHOR` (254 profiles per anchor)
-   - No pre-built pool on disk — profiles are generated lazily on demand
-   - No deduplication across weeks — the same anchor can in principle be selected again; rare given pool size (~100k rows, 19 anchors/week)
+   **Profile generators** (`profile_generator.py`):
+   - **Ceteris-paribus (CP)**: sweeps each of 7 continuous features one at a time across its full range while holding all other features fixed. `PROFILES_PER_ANCHOR = 254`.
+   - **Gaussian perturbations**: perturbs all continuous features simultaneously with independent Gaussian noise: σ = `gaussian_sigma_frac × (feature_max − feature_min)`. Values clipped and constraint-validated. `GAUSSIAN_PROFILES_PER_ANCHOR = 254` (equal budget parity). Tests whether joint feature variation allows faster interaction learning.
+
+   **Weekly AL loop and anchor pool**:
+   ```
+   n_anchors_base = weekly_budget // profiles_per_anchor   # e.g. 5000 // 254 = 19
+   n_pool         = n_anchors_base × anchor_space_multiplier   # e.g. 19 × 30 = 570
+   n_selected     = round(n_pool × selection_fraction)          # e.g. 570 × 10% = 57
+   profiles       → generated from n_selected anchors, sampled to weekly_budget
+   ```
+   - `anchor_space_multiplier` — total candidate pool to score (default 30)
+   - `selection_fraction` — fraction of pool to profile (default 10%); increase if Gaussian dropout leaves budget under-utilised
+   - No pre-built pool on disk — profiles generated lazily each week
+   - No deduplication across weeks
 
    **Convergence metrics**:
    - **RMSE on holdout** — 5,000 real rows carved from the dataset at construction time, oracle-labeled, never used for training. Population-representative; comparable across weeks and strategies.
-   - **Relative RMSE** — RMSE / mean holdout premium (global normalisation). Per-segment relative RMSE is also stored at simulation time via `segment_rel_rmse()` in `segments.py`, using each segment's own mean premium as denominator. The dashboard heatmap supports both RMSE and Relative RMSE at the segment level.
-   - **SHAP cosine similarity** *(simulation-only)* — mean cosine similarity between oracle and competitor SHAP vectors on the holdout. Measures tariff *structure* recovery, not just premium accuracy. Requires oracle access → cannot be observed in real-world deployment. Included as a simulation diagnostic only.
+   - **Relative RMSE** — RMSE / mean holdout premium (global normalisation). Per-segment relative RMSE also stored via `segment_rel_rmse()` in `segments.py`.
+   - **SHAP cosine similarity** *(simulation-only)* — mean cosine similarity between oracle and competitor SHAP vectors on the holdout. Requires oracle access → cannot be observed in real-world deployment.
 
-   **AL query strategies** (all deployable in practice except where noted):
-   - `random` — uniform random baseline; representative by construction
-   - `uncertainty` — bootstrap variance across lightweight ensemble members; falls back to random if labeled set is empty
-   - `error_based` — expected *relative* error (|residual| / label) predicted by a proxy model trained on labeled data; falls back to random if labeled set is empty
-   - `segment_adaptive` — scores each anchor by global + per-segment *relative* RMSE on the labeled set; converges toward random as gaps close; falls back to random if labeled set is empty
-   - `disruption` — monitors week-on-week *change* in per-segment RMSE; concentrates budget on random sampling within disrupted segments (≥15% relative RMSE increase); reverts to global random when no disruption; falls back to random on first week or after restart
+   **AL query strategies** — two families, same selection logic, different profile generators:
 
-   **Removed strategy**: `shap_divergence` required oracle SHAP values to score candidates — not available in real-world deployment. Removed from the simulation.
+   *CP strategies* (`_cp` suffix):
+   - `random_cp` — uniform random baseline
+   - `uncertainty_cp` — bootstrap variance across lightweight ensemble members
+   - `error_based_cp` — expected *relative* error predicted by proxy model on labeled data
+   - `segment_adaptive_cp` — scores anchors by global + per-segment *relative* RMSE on labeled set
+   - `disruption_cp` — monitors week-on-week RMSE change; concentrates budget on disrupted segments (≥15% increase)
+
+   *Gaussian strategies* (`_gauss` suffix): identical selection logic, `generate_gaussian_profiles` instead of `generate_ceteris_paribus`:
+   - `random_gauss`, `uncertainty_gauss`, `error_based_gauss`, `segment_adaptive_gauss`, `disruption_gauss`
+
+   *Market strategy* (no suffix):
+   - `random_market` — 90% real portfolio rows + 10% CP profiles; models portfolio coverage gap
+
+   All strategies fall back to random when labeled set is empty. `shap_divergence` was removed (required oracle SHAP — not deployable).
+
+   **Strategy naming in `al_loop.py`**: suffix is stripped before dispatch (`_cp` → 3 chars, `_gauss` → 6 chars); `random_market` has no suffix and falls through as-is. Restart label = `{strategy}_restart` (e.g. `random_cp_restart`).
 
    **Tariff change simulation** (`PerturbedOracleEngine` in `perturbed_oracle.py`):
    - A perturbed oracle applies a systematic premium shift (e.g. young-driver surcharge +20%, uniform reprice, area repricing, compose for stacked shocks)
-   - Each named **simulation** defines its own `tariff_changes` timeline — a sorted list of `(week, perturbed_oracle)` pairs applied within one continuous run; the competitor model experiences all shocks in a single timeline
-   - Multiple oracle switches in one run are supported; holdout labels switch at each change so RMSE always measures recovery of the *currently active* tariff
-   - `restart_at_tariff_change=True` clears the labeled set after **every** tariff-change week's evaluation (not just the first); model re-learns from scratch from new-oracle labels only
+   - Each named **simulation** defines its own `tariff_changes` timeline — a sorted list of `(week, perturbed_oracle)` pairs applied within one continuous run
+   - Multiple oracle switches in one run are supported; holdout labels switch at each change
+   - `restart_at_tariff_change=True` clears the labeled set after **every** tariff-change week's evaluation
 
    **Configuration system** (`config/`):
-   - `config/simulation.yaml` — global params (n_weeks, weekly_budget, seed, strategies, metrics, restart_strategies) and a `simulations` list; each simulation entry has a name, label, and its own `tariff_changes` schedule
-   - `config/tariff_changes.yaml` — named perturbation library; definitions only, no timing; referenced by name from the simulation schedule; supports `young_driver_surcharge`, `high_value_surcharge`, `uniform_reprice`, `area_reprice`; composed shocks are built from lists of names in one schedule entry
-   - `src/market_model_al/config.py` — loader (`load_simulation_cfg`, `load_tariff_changes_cfg`), resolver (`resolve_simulations`), and perturbation factory (`build_perturbation_fn`, `build_perturbed_oracle`)
-   - `shap_cosine_similarity` metric is optional; disabling it skips oracle SHAP precomputation at startup (~10 s); `al_loop.py` writes `float("nan")` in that column and the dashboard hides the SHAP panels
+   - `config/simulation.yaml` — global params (n_weeks, weekly_budget, seed, strategies, metrics, restart_strategies) and a `simulations` list; `advanced:` block contains `anchor_space_multiplier`, `selection_fraction`, `gaussian_sigma_frac`, `market_cp_ratio`, `random_market.n_cp_anchors`
+   - `config/tariff_changes.yaml` — named perturbation library; definitions only, no timing
+   - `src/market_model_al/config.py` — loader, resolver, perturbation factory
 
-   **Core research question**: does the AL strategy rediscover systematic ceteris paribus profiling on its own? A good strategy should converge on varying one factor at a time across its range — this is the structure of a competitor tariff that scraping is trying to reveal.
+   **Core research questions**:
+   1. Does the AL strategy rediscover systematic ceteris paribus profiling on its own?
+   2. Do Gaussian joint perturbations outperform CP sweeps by exposing LightGBM to multivariate variation within each anchor's batch?
 
    **Simulation findings (10-week run, 5 000 profiles/week)**:
-   - Random anchor sampling is competitive with or better than all informativeness strategies on global RMSE and SHAP similarity
-   - `error_based` recovers the young-driver segment (age < 30) faster — the one segment where a sophisticated strategy wins; commercially important
-   - Root cause: greedy informativeness strategies are not representative — they starve mainstream segments of scraping budget
-   - Full restart after a targeted tariff change (young-driver surcharge) is not always optimal: it discards valid labels from unchanged segments and can end up with higher global RMSE at week 10 than continuous scraping
-   - `disruption` is the principled response: targets only disrupted segments without discarding any labels
-   - **`random_market` clearly outperforms all CP-based strategies**: real portfolio rows and market-augmenting CP rows are genuine multivariate profiles with natural feature correlations — LightGBM learns interaction effects far more efficiently from these than from CP sweeps (which vary one feature at a time). This challenges the assumption that systematic ceteris-paribus profiling is the optimal data collection strategy for competitor model building.
+   - `random_market` clearly outperforms all CP strategies: real rows have natural feature correlations; LightGBM learns interactions far more efficiently
+   - Among CP strategies, `random_cp` is competitive with all informativeness strategies globally
+   - `error_based_cp` recovers the young-driver segment faster — commercially important
+   - Root cause: greedy strategies starve mainstream segments; random is representative by construction
+   - Full restart after targeted tariff change is not always optimal; `disruption_cp` is the principled alternative
+   - Gaussian strategies: hypothesis is that joint variation enables faster interaction learning; results pending re-run with corrected anchor pool sizing
 
 ### No copula / generative model
-The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly. Drawing from real data is simpler and more principled — those profiles represent the true feature distribution by definition.
+The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly.
 
 ### SHAP
 Used in two places:
-- On the **oracle** — validate the learned tariff structure looks actuarially sensible (driver age curve, vehicle age, power, interactions)
-- On the **competitor model** — track recovery of the oracle's SHAP structure across AL weeks (simulation diagnostic only; not observable in practice)
+- On the **oracle** — validate the learned tariff structure looks actuarially sensible
+- On the **competitor model** — track recovery of the oracle's SHAP structure across AL weeks (simulation diagnostic only)
 
 ## Stack
 Python 3.12, LightGBM, SHAP, Streamlit, PyYAML. All notebooks are `.py` files (numbered), not `.ipynb`. Virtual environment is `.venv` (not conda).
 
 ## Dashboard notes
 
+### Sidebar
+Strategies are grouped in three collapsible expanders: **CP strategies**, **Gaussian strategies**, **Restart variants**. `random_market` is a standalone top-level checkbox. CP strategies are rendered with triangle markers; Gaussian strategies with circle markers; restart variants with dashed lines.
+
+A `_LEGACY_STRATEGY_NAMES` dict in `load_results()` transparently remaps old strategy names (pre-`_cp` rename) so existing parquets work without re-running the simulation.
+
 ### Theming
-The dashboard uses a dark theme defined in `.streamlit/config.toml` (GitHub-dark palette). A light-mode toggle was prototyped using CSS injection (`st.markdown(unsafe_allow_html=True)`) but abandoned: tab labels and `st.dataframe` metric text remained hard to read and would have required extensive per-element CSS to fix. The `_LIGHT_CSS` block and `THEMES` dict were removed from `app.py`. If light mode is revisited, the right approach is probably a separate `config.toml` profile or a custom Streamlit component rather than CSS overrides.
+The dashboard uses a dark theme defined in `.streamlit/config.toml` (GitHub-dark palette). A light-mode toggle was prototyped using CSS injection but abandoned — tab labels and `st.dataframe` metric text required extensive per-element CSS. If light mode is revisited, use a separate `config.toml` profile or a custom Streamlit component.

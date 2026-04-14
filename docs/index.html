@@ -272,7 +272,7 @@
   <p class="byline">David Fischer · 2026</p>
   <div class="badge-row">
     <span class="badge">Python 3.12 · LightGBM · SHAP</span>
-    <span class="badge">Active Learning · 6 strategies</span>
+    <span class="badge">Active Learning · 11 strategies</span>
     <span class="badge">Streamlit Dashboard</span>
     <span class="badge">Motor Insurance · 105 K policies</span>
     <span class="badge">Lledó &amp; Pavía (2024)</span>
@@ -299,10 +299,12 @@
     </p>
 
     <div class="callout insight">
-      <strong>Core research question.</strong> Does an active learning query strategy
-      rediscover systematic ceteris paribus profiling on its own — varying one factor
-      at a time (e.g. driver age 18→70) while holding all others fixed? If so, the
-      strategy has converged on exactly how practitioners scrape in the real world.
+      <strong>Core research questions.</strong>
+      (1) Does an active learning query strategy rediscover systematic ceteris paribus
+      profiling on its own — varying one factor at a time while holding all others fixed?
+      (2) Do Gaussian joint perturbations — varying <em>all</em> features simultaneously
+      around an anchor — outperform CP sweeps by exposing LightGBM to genuine multivariate
+      variation within each anchor's batch?
     </div>
   </section>
 
@@ -373,25 +375,33 @@
       arriving via the aggregator before the systematic AL loop begins.
     </p>
     <p>
-      The loop then runs <strong>weekly</strong>: each week, fresh anchor rows are sampled
-      from the real dataset, ceteris-paribus candidate profiles are generated on the fly,
-      and the query strategy selects which anchors to scrape.
-      All CP profiles from selected anchors are labeled by the oracle and added to the
-      training set. The competitor model is retrained after each week's batch.
+      The loop then runs <strong>weekly</strong>. Two profile generators are compared:
+    </p>
+    <ul style="margin: 0 0 14px 20px;">
+      <li><strong>Ceteris-paribus (CP):</strong> each continuous feature is swept one at a time across its full range, all other features held fixed. 254 profiles per anchor. Mirrors standard scraping practice.</li>
+      <li><strong>Gaussian perturbations:</strong> all continuous features are perturbed <em>simultaneously</em> with independent Gaussian noise. Same 254-profile budget. Tests whether joint variation enables faster interaction learning.</li>
+    </ul>
+    <p>
+      Each week, a pool of <code>n_anchors_base × anchor_space_multiplier</code> candidates
+      is scored, the top <code>selection_fraction</code> are profiled, and the resulting
+      profiles are sampled to the weekly budget. Budget converts to base anchors as
+      <code>n_anchors_base = 5 000 ÷ 254 ≈ 19</code>; with defaults
+      <code>anchor_space_multiplier = 30</code> and <code>selection_fraction = 10%</code>
+      this means 570 candidates scored → 57 anchors profiled → 5 000 profiles labeled.
     </p>
 
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>AL strategy</th><th>Query criterion</th></tr>
+          <tr><th>AL strategy</th><th>Variants</th><th>Query criterion</th></tr>
         </thead>
         <tbody>
-          <tr><td>Random</td><td>Uniform random baseline — no model required</td></tr>
-          <tr><td>Random market</td><td>Stratified sample from real portfolio rows (90 %) and market-augmenting CP profiles (10 %); split reflects the assumed portfolio coverage of aggregator traffic</td></tr>
-          <tr><td>Uncertainty</td><td>Anchors with highest bootstrap prediction variance across ensemble members</td></tr>
-          <tr><td>Error-based</td><td>Anchors with highest expected relative error, estimated by a proxy model trained on labeled residuals</td></tr>
-          <tr><td>Segment-adaptive</td><td>Anchors scored by global + per-segment relative RMSE on the labeled set; converges toward random as segment gaps close</td></tr>
-          <tr><td>Disruption-adaptive</td><td>Concentrates budget on segments with a sharp week-on-week RMSE increase; reverts to global random when no disruption is detected</td></tr>
+          <tr><td>Random</td><td><code>_cp</code> · <code>_gauss</code></td><td>Uniform random anchor selection — no model required</td></tr>
+          <tr><td>Random market</td><td>—</td><td>90% real portfolio rows + 10% CP profiles from random anchors; models portfolio coverage gap in aggregator traffic</td></tr>
+          <tr><td>Uncertainty</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors with highest bootstrap prediction variance across ensemble members</td></tr>
+          <tr><td>Error-based</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors with highest expected relative error, estimated by a proxy model trained on labeled residuals</td></tr>
+          <tr><td>Segment-adaptive</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors scored by global + per-segment relative RMSE on the labeled set; converges toward random as segment gaps close</td></tr>
+          <tr><td>Disruption-adaptive</td><td><code>_cp</code> · <code>_gauss</code></td><td>Concentrates budget on segments with a sharp week-on-week RMSE increase; reverts to global random when no disruption is detected</td></tr>
         </tbody>
       </table>
     </div>
@@ -513,11 +523,10 @@
     <h2>Active learning results</h2>
 
     <p>
-      Simulation run: <strong>10 weeks · 5 000 profiles/week · 6 strategies</strong>.
-      Strategies operate on <em>anchor selection</em>: each week a pool of real data rows
-      is scored, the best anchors are selected, and all their ceteris-paribus profiles are
-      generated and labeled. Budget converts to anchors as
-      <code>n_anchors = 5 000 ÷ 254 ≈ 19</code> per week.
+      Simulation run: <strong>10 weeks · 5 000 profiles/week · 11 strategies</strong>
+      (5 CP variants, 5 Gaussian variants, random market).
+      Each week, 570 candidate anchors are scored, the top 10% (57) are profiled,
+      and profiles are sampled to the weekly budget of 5 000.
     </p>
 
     <h3>Global convergence</h3>
@@ -578,6 +587,16 @@
       reverts to global random once the gap closes, and never discards valid labeled data
       from unchanged segments.
     </div>
+
+    <h3>Gaussian perturbations vs. ceteris-paribus profiles</h3>
+    <p>
+      A second research axis tests whether varying all features simultaneously — rather
+      than one at a time — produces training data that LightGBM can learn from more
+      efficiently. Gaussian profiles keep each anchor's batch near its natural feature
+      context (via anchor-centred noise) while exposing the model to genuine joint-feature
+      variation, which CP sweeps systematically suppress. Results for this comparison are
+      pending a full re-run with the corrected anchor pool sizing.
+    </p>
   </section>
 
   <!-- ── REPO ── -->
