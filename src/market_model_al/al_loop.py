@@ -163,6 +163,7 @@ class ALSimulation:
         random_market_n_cp_anchors: int = _RANDOM_MARKET_N_CP_ANCHORS,
         market_cp_ratio: float = _RANDOM_MARKET_CP_RATIO,
         gaussian_sigma_frac: float = 0.3,
+        profile_pool_multiplier: int = 3,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -210,6 +211,17 @@ class ALSimulation:
             Noise width for ``*_gauss`` strategies, expressed as a fraction of
             each feature's range.  E.g. 0.3 → σ ≈ 30 % of range per feature.
             Has no effect on non-Gaussian strategies.
+        profile_pool_multiplier : int
+            Over-generation factor for CP and Gaussian strategies.  The strategy
+            selects ``n_anchors_base × profile_pool_multiplier`` anchors, all
+            their profiles are generated, then a random sample of ``weekly_budget``
+            is drawn from the pool.  Benefits:
+            (a) Gaussian: compensates for constraint-validation dropout so the
+                labeled set always grows by ~weekly_budget rows.
+            (b) Both: more diverse anchors per week → broader spatial coverage,
+                reducing the risk of repeatedly sampling the same local region.
+            A value of 1 disables over-generation (original behaviour).
+            Has no effect on ``random_market``.
 
         Returns
         -------
@@ -236,9 +248,10 @@ class ALSimulation:
         tc_schedule: list[tuple[int, Any]] = sorted(tariff_changes or [], key=lambda x: x[0])
         tc_weeks = {w for w, _ in tc_schedule}
 
-        ppa          = GAUSSIAN_PROFILES_PER_ANCHOR if is_gauss else PROFILES_PER_ANCHOR
-        n_anchors    = max(1, weekly_budget // ppa)
-        n_candidates = n_anchors * candidate_multiplier
+        ppa             = GAUSSIAN_PROFILES_PER_ANCHOR if is_gauss else PROFILES_PER_ANCHOR
+        n_anchors_base  = max(1, weekly_budget // ppa)
+        n_anchors       = n_anchors_base * profile_pool_multiplier
+        n_candidates    = n_anchors * candidate_multiplier
 
         rng = np.random.default_rng(int(self._master_rng.integers(0, 2**31)))
 
@@ -265,11 +278,12 @@ class ALSimulation:
             print(f"  per week: {n_cp} from CP pool + {n_real} from real pool")
         elif is_gauss:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
-                  f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}"
+                  f"  n_anchors/week={n_anchors} (×{profile_pool_multiplier})  candidates/week={n_candidates}"
                   f"  sigma_frac={gaussian_sigma_frac}  weeks={n_weeks}")
         else:  # CP strategies (_cp suffix)
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
-                  f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}  weeks={n_weeks}")
+                  f"  n_anchors/week={n_anchors} (×{profile_pool_multiplier})"
+                  f"  candidates/week={n_candidates}  weeks={n_weeks}")
         if tc_schedule:
             changes_str = ", ".join(f"week {w}" for w, _ in tc_schedule)
             print(f"  tariff changes at: {changes_str}"
@@ -403,6 +417,14 @@ class ALSimulation:
                     profiles = generate_ceteris_paribus(selected_anchors, validate=True)
                 if len(profiles) == 0:
                     continue
+
+                # Sample down to weekly_budget when the pool exceeds it.
+                # This ensures every strategy adds exactly ~weekly_budget rows
+                # per week, including Gaussian strategies whose validation
+                # dropout is offset by the profile_pool_multiplier.
+                if len(profiles) > weekly_budget:
+                    sample_idx = rng.choice(len(profiles), size=weekly_budget, replace=False)
+                    profiles = profiles.iloc[sample_idx].reset_index(drop=True)
 
             # ── Label with current oracle ─────────────────────────────────────
             labels = current_oracle.query(profiles)

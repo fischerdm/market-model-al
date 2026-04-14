@@ -126,3 +126,11 @@ advanced:
   # each continuous feature's range.  0.3 → σ ≈ 30 % of range per feature,
   # keeping profiles near the anchor while varying all features jointly.
   gaussian_sigma_frac: 0.3
+
+  # Profile pool over-generation factor (CP and Gaussian strategies).
+  # Selects n_anchors_base × profile_pool_multiplier anchors, generates all
+  # their profiles, then samples weekly_budget from the pool.
+  # Benefits: (a) offsets Gaussian validation dropout, (b) more diverse spatial
+  # coverage per week by using more anchor points.
+  # Set to 1 to disable (original behaviour: generate exactly n_anchors_base anchors).
+  profile_pool_multiplier: 3

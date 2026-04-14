@@ -64,7 +64,8 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
     rm = advanced.get("random_market") or {}
     cfg["random_market_n_cp_anchors"] = int(rm.get("n_cp_anchors", 50))
 
-    cfg["gaussian_sigma_frac"] = float(advanced.get("gaussian_sigma_frac", 0.3))
+    cfg["gaussian_sigma_frac"]      = float(advanced.get("gaussian_sigma_frac", 0.3))
+    cfg["profile_pool_multiplier"]  = int(advanced.get("profile_pool_multiplier", 3))
 
     metrics = set(raw.get("metrics", list(_VALID_METRICS)))
     unknown = metrics - _VALID_METRICS

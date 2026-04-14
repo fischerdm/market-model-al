@@ -57,6 +57,7 @@ COMPUTE_SHAP:      bool      = sim_cfg["compute_shap_similarity"]
 RM_N_CP_ANCHORS:   int       = sim_cfg["random_market_n_cp_anchors"]
 MARKET_CP_RATIO:   float     = sim_cfg["market_cp_ratio"]
 GAUSSIAN_SIGMA:    float     = sim_cfg["gaussian_sigma_frac"]
+POOL_MULTIPLIER:   int       = sim_cfg["profile_pool_multiplier"]
 
 print("Simulation config:")
 print(f"  n_weeks={N_WEEKS}  weekly_budget={WEEKLY_BUDGET}  "
@@ -68,6 +69,7 @@ print(f"  SHAP similarity   : {'enabled' if COMPUTE_SHAP else 'disabled'}")
 print(f"  market_cp_ratio   : {MARKET_CP_RATIO}  (warm start + random_market)")
 print(f"  random_market     : n_cp_anchors={RM_N_CP_ANCHORS}")
 print(f"  gaussian_sigma    : {GAUSSIAN_SIGMA}")
+print(f"  pool_multiplier   : {POOL_MULTIPLIER}")
 print(f"\nSimulations ({len(simulations)}):")
 for s in simulations:
     if s["has_tariff_changes"]:
@@ -147,6 +149,7 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
         random_market_n_cp_anchors=RM_N_CP_ANCHORS,
         market_cp_ratio=MARKET_CP_RATIO,
         gaussian_sigma_frac=GAUSSIAN_SIGMA,
+        profile_pool_multiplier=POOL_MULTIPLIER,
     )
     df_run["simulation"] = sim_name
     if strategy_label is not None:
