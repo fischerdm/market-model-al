@@ -26,37 +26,39 @@ from market_model_al.segments import SEGMENTS  # noqa: E402 — needs sys.path f
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 STRATEGY_LABELS = {
-    "random":                     "Random",
-    "random_market":              "Random market",
-    "uncertainty":                "Uncertainty",
-    "error_based":                "Error-based",
-    "segment_adaptive":           "Segment-adaptive",
-    "disruption":                 "Disruption-adaptive",
-    "random_restart":             "Random (restart)",
-    "segment_adaptive_restart":   "Segment-adaptive (restart)",
+    # CP strategies (one feature swept at a time)
+    "random_cp":                    "Random (CP)",
+    "random_market":                "Random market",
+    "uncertainty_cp":               "Uncertainty (CP)",
+    "error_based_cp":               "Error-based (CP)",
+    "segment_adaptive_cp":          "Segment-adaptive (CP)",
+    "disruption_cp":                "Disruption-adaptive (CP)",
+    "random_cp_restart":            "Random (CP, restart)",
+    "segment_adaptive_cp_restart":  "Segment-adaptive (CP, restart)",
     # Gaussian-perturbation variants
-    "random_gauss":               "Random (Gaussian)",
-    "uncertainty_gauss":          "Uncertainty (Gaussian)",
-    "error_based_gauss":          "Error-based (Gaussian)",
-    "segment_adaptive_gauss":     "Segment-adaptive (Gaussian)",
-    "disruption_gauss":           "Disruption-adaptive (Gaussian)",
+    "random_gauss":                 "Random (Gaussian)",
+    "uncertainty_gauss":            "Uncertainty (Gaussian)",
+    "error_based_gauss":            "Error-based (Gaussian)",
+    "segment_adaptive_gauss":       "Segment-adaptive (Gaussian)",
+    "disruption_gauss":             "Disruption-adaptive (Gaussian)",
 }
 
 PALETTE = {
-    "random":                     "#888888",
-    "random_market":              "#17becf",
-    "uncertainty":                "#1f77b4",
-    "error_based":                "#ff7f0e",
-    "segment_adaptive":           "#9467bd",
-    "disruption":                 "#d62728",
-    "random_restart":             "#888888",
-    "segment_adaptive_restart":   "#9467bd",
+    # CP strategies
+    "random_cp":                    "#888888",
+    "random_market":                "#17becf",
+    "uncertainty_cp":               "#1f77b4",
+    "error_based_cp":               "#ff7f0e",
+    "segment_adaptive_cp":          "#9467bd",
+    "disruption_cp":                "#d62728",
+    "random_cp_restart":            "#888888",
+    "segment_adaptive_cp_restart":  "#9467bd",
     # Gaussian variants — lighter tints of their CP counterparts
-    "random_gauss":               "#cccccc",
-    "uncertainty_gauss":          "#aec7e8",
-    "error_based_gauss":          "#ffbb78",
-    "segment_adaptive_gauss":     "#c5b0d5",
-    "disruption_gauss":           "#f7b6b6",
+    "random_gauss":                 "#cccccc",
+    "uncertainty_gauss":            "#aec7e8",
+    "error_based_gauss":            "#ffbb78",
+    "segment_adaptive_gauss":       "#c5b0d5",
+    "disruption_gauss":             "#f7b6b6",
 }
 
 METRIC_OPTIONS = {
@@ -90,9 +92,23 @@ METRIC_HELP = {
 
 # ── Data loading ───────────────────────────────────────────────────────────────
 
+_LEGACY_STRATEGY_NAMES = {
+    # Maps pre-rename strategy names (without _cp suffix) to current names.
+    # Allows the dashboard to display results from parquets generated before
+    # the rename without requiring an immediate re-run of the simulation.
+    "random":                    "random_cp",
+    "uncertainty":               "uncertainty_cp",
+    "error_based":               "error_based_cp",
+    "segment_adaptive":          "segment_adaptive_cp",
+    "disruption":                "disruption_cp",
+    "random_restart":            "random_cp_restart",
+    "segment_adaptive_restart":  "segment_adaptive_cp_restart",
+}
+
 @st.cache_data
 def load_results() -> pd.DataFrame:
     df = pd.read_parquet(RESULTS_PATH)
+    df["strategy"] = df["strategy"].replace(_LEGACY_STRATEGY_NAMES)
     df["strategy_label"] = df["strategy"].map(STRATEGY_LABELS).fillna(df["strategy"])
     return df
 
@@ -126,6 +142,7 @@ def convergence_figure(
         grp = df[df["strategy"] == strat].sort_values("week")
         if grp.empty:
             continue
+        is_cp      = "_cp" in strat   # random_cp, uncertainty_cp, …_cp_restart
         is_restart = strat.endswith("_restart")
         fig.add_trace(go.Scatter(
             x=grp["week"],
@@ -137,7 +154,10 @@ def convergence_figure(
                 width=2,
                 dash="dash" if is_restart else "solid",
             ),
-            marker=dict(size=6),
+            marker=dict(
+                size=8 if is_cp else 6,
+                symbol="triangle-up" if is_cp else "circle",
+            ),
             hovertemplate=(
                 f"<b>{STRATEGY_LABELS.get(strat, strat)}</b><br>"
                 "Week: %{x}<br>"
@@ -591,8 +611,8 @@ with tab3:
 
     strategies_info = [
         {
-            "name": "Random",
-            "key": "random",
+            "name": "Random (CP)",
+            "key": "random_cp",
             "summary": "Selects anchors uniformly at random from the candidate pool each week.",
             "strengths": [
                 "Representative by construction — every region of feature space is sampled in proportion to its true frequency.",
@@ -633,8 +653,8 @@ with tab3:
             "when": "Use as the primary benchmark when the competitor's portfolio is known to be selective — i.e. when pure random from the portfolio would under-represent segments the competitor prices but doesn't write.",
         },
         {
-            "name": "Uncertainty",
-            "key": "uncertainty",
+            "name": "Uncertainty (CP)",
+            "key": "uncertainty_cp",
             "summary": "Trains several bootstrap-resampled models and selects anchors where their predictions disagree most (high variance).",
             "detail": (
                 "Bootstrap resampling means fitting the same model type multiple times, each time on a random sample "
@@ -654,8 +674,8 @@ with tab3:
             "when": "Useful when the feature space has large unexplored regions. Less effective once the warm start already covers the main effects.",
         },
         {
-            "name": "Error-based",
-            "key": "error_based",
+            "name": "Error-based (CP)",
+            "key": "error_based_cp",
             "summary": "Trains a proxy model on labeled relative residuals and selects anchors predicted to have the highest relative error.",
             "strengths": [
                 "Directly targets where the competitor model is currently most wrong.",
@@ -669,8 +689,8 @@ with tab3:
             "when": "Best when you care primarily about one known high-error segment rather than global convergence.",
         },
         {
-            "name": "Segment-adaptive",
-            "key": "segment_adaptive",
+            "name": "Segment-adaptive (CP)",
+            "key": "segment_adaptive_cp",
             "summary": "Scores each anchor by the global relative RMSE plus the relative RMSE of every named segment it belongs to.",
             "strengths": [
                 "Dynamic: allocation shifts automatically as segment gaps open and close.",
@@ -685,8 +705,8 @@ with tab3:
             "when": "Good all-round strategy when you expect persistent difficulty in specific named segments.",
         },
         {
-            "name": "Disruption-adaptive",
-            "key": "disruption",
+            "name": "Disruption-adaptive (CP)",
+            "key": "disruption_cp",
             "summary": "Monitors the week-on-week *change* in per-segment RMSE. Concentrates budget on disrupted segments (≥15% relative RMSE increase); reverts to global random otherwise.",
             "strengths": [
                 "Uses the derivative of RMSE, not its level — fires on disruption, not on permanent difficulty.",
@@ -753,16 +773,17 @@ when the AL strategy is already targeting the right anchors.
             """
         )
     gauss_strategies_info = [
-        ("Random (Gaussian)",             "random_gauss",           "Same as Random but profiles are joint Gaussian perturbations instead of 1-D CP sweeps. The primary baseline for testing whether the profile generator matters independently of anchor selection."),
+        ("Random (Gaussian)",             "random_gauss",           "Same as Random (CP) but profiles are joint Gaussian perturbations instead of 1-D CP sweeps. The primary baseline for testing whether the profile generator matters independently of anchor selection."),
         ("Uncertainty (Gaussian)",        "uncertainty_gauss",      "Bootstrap uncertainty scoring selects anchors; Gaussian profiles are generated from them. Tests whether joint variation amplifies the uncertainty strategy's coverage gains."),
         ("Error-based (Gaussian)",        "error_based_gauss",      "Proxy-model error scoring selects anchors in high-error regions; Gaussian profiles keep the budget focused there while varying features jointly."),
         ("Segment-adaptive (Gaussian)",   "segment_adaptive_gauss", "Segment RMSE allocation selects anchors; Gaussian profiles ensure the chosen segment receives varied joint coverage rather than axis-aligned sweeps."),
         ("Disruption-adaptive (Gaussian)","disruption_gauss",       "Disruption detection selects anchors in newly-shocked segments; Gaussian profiles help the model recover interactions disrupted by the tariff change."),
     ]
     for name, key, desc in gauss_strategies_info:
+        cp_key = key.replace("_gauss", "_cp")   # e.g. random_gauss → random_cp
         with st.expander(f"**{name}**  —  {desc}", expanded=False):
             st.markdown(
-                f"Identical anchor-selection logic to **{STRATEGY_LABELS[key.replace('_gauss', '')]}** "
+                f"Identical anchor-selection logic to **{STRATEGY_LABELS[cp_key]}** "
                 f"above. The only difference is the profile generator: joint Gaussian perturbations "
                 f"instead of ceteris-paribus sweeps. See the explainer above for details."
             )

@@ -13,12 +13,13 @@ seed: 42
 # Available: random, uncertainty, error_based, segment_adaptive, disruption
 
 strategies:
-  - random
+  # CP-profile strategies (one feature swept at a time)
+  - random_cp
   - random_market
-  - uncertainty
-  - error_based
-  - segment_adaptive
-  - disruption
+  - uncertainty_cp
+  - error_based_cp
+  - segment_adaptive_cp
+  - disruption_cp
   # Gaussian-perturbation variants: same anchor selection, joint profile generator.
   - random_gauss
   - uncertainty_gauss
@@ -50,8 +51,8 @@ metrics:
 # Set to [] to disable restarts entirely.
 
 restart_strategies:
-  - random
-  - segment_adaptive
+  - random_cp
+  - segment_adaptive_cp
 
 # ── Simulations ──────────────────────────────────────────────────────────────
 # Each entry is one named simulation run per strategy.

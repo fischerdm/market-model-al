@@ -86,21 +86,21 @@ for d in [RESULTS_DIR, FIGURES_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 PALETTE = {
-    "random":                    "#888888",
-    "random_market":             "#17becf",
-    "uncertainty":               "#1f77b4",
-    "error_based":               "#ff7f0e",
-    "segment_adaptive":          "#9467bd",
-    "disruption":                "#2ca02c",
-    "random_restart":            "#bbbbbb",
-    "segment_adaptive_restart":  "#c5b0d5",
-    "disruption_restart":        "#98df8a",
-    # Gaussian variants — lighter/dashed versions of the CP palette entries
-    "random_gauss":              "#cccccc",
-    "uncertainty_gauss":         "#aec7e8",
-    "error_based_gauss":         "#ffbb78",
-    "segment_adaptive_gauss":    "#c5b0d5",
-    "disruption_gauss":          "#98df8a",
+    # CP strategies
+    "random_cp":                    "#888888",
+    "random_market":                "#17becf",
+    "uncertainty_cp":               "#1f77b4",
+    "error_based_cp":               "#ff7f0e",
+    "segment_adaptive_cp":          "#9467bd",
+    "disruption_cp":                "#2ca02c",
+    "random_cp_restart":            "#bbbbbb",
+    "segment_adaptive_cp_restart":  "#c5b0d5",
+    # Gaussian variants — lighter tints of their CP counterparts
+    "random_gauss":                 "#cccccc",
+    "uncertainty_gauss":            "#aec7e8",
+    "error_based_gauss":            "#ffbb78",
+    "segment_adaptive_gauss":       "#c5b0d5",
+    "disruption_gauss":             "#98df8a",
 }
 
 # ── Load warm start ────────────────────────────────────────────────────────────

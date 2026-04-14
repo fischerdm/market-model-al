@@ -221,10 +221,16 @@ class ALSimulation:
         if strategy not in STRATEGIES:
             raise ValueError(f"Unknown strategy '{strategy}'.  Choose from {STRATEGIES}.")
 
-        # Gaussian strategies share the same selection logic as their CP counterparts;
-        # only the profile generator differs.  Strip the suffix for dispatch.
-        is_gauss     = strategy.endswith("_gauss")
-        base_strategy = strategy[:-6] if is_gauss else strategy  # "_gauss" is 6 chars
+        # Both CP (_cp) and Gaussian (_gauss) strategies share the same selection logic;
+        # only the profile generator differs.  Strip the suffix to get the dispatch key.
+        is_gauss      = strategy.endswith("_gauss")
+        is_cp         = strategy.endswith("_cp")
+        if is_gauss:
+            base_strategy = strategy[:-6]   # strip "_gauss" (6 chars) → e.g. "random"
+        elif is_cp:
+            base_strategy = strategy[:-3]   # strip "_cp"    (3 chars) → e.g. "random"
+        else:
+            base_strategy = strategy        # "random_market" — no suffix
 
         # Sort change events by week and build a fast lookup set
         tc_schedule: list[tuple[int, Any]] = sorted(tariff_changes or [], key=lambda x: x[0])
@@ -261,7 +267,7 @@ class ALSimulation:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
                   f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}"
                   f"  sigma_frac={gaussian_sigma_frac}  weeks={n_weeks}")
-        else:
+        else:  # CP strategies (_cp suffix)
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
                   f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}  weeks={n_weeks}")
         if tc_schedule:

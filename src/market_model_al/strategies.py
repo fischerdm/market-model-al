@@ -288,8 +288,9 @@ def disruption_query(
 # ── registry ──────────────────────────────────────────────────────────────────
 
 STRATEGIES = [
-    "random", "random_market",
-    "uncertainty", "error_based", "segment_adaptive", "disruption",
+    # CP-profile strategies (one feature swept at a time)
+    "random_cp", "random_market",
+    "uncertainty_cp", "error_based_cp", "segment_adaptive_cp", "disruption_cp",
     # Gaussian-perturbation variants: same selection logic, joint profile generator.
     "random_gauss", "uncertainty_gauss", "error_based_gauss",
     "segment_adaptive_gauss", "disruption_gauss",
