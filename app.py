@@ -34,6 +34,12 @@ STRATEGY_LABELS = {
     "disruption":                 "Disruption-adaptive",
     "random_restart":             "Random (restart)",
     "segment_adaptive_restart":   "Segment-adaptive (restart)",
+    # Gaussian-perturbation variants
+    "random_gauss":               "Random (Gaussian)",
+    "uncertainty_gauss":          "Uncertainty (Gaussian)",
+    "error_based_gauss":          "Error-based (Gaussian)",
+    "segment_adaptive_gauss":     "Segment-adaptive (Gaussian)",
+    "disruption_gauss":           "Disruption-adaptive (Gaussian)",
 }
 
 PALETTE = {
@@ -45,6 +51,12 @@ PALETTE = {
     "disruption":                 "#d62728",
     "random_restart":             "#888888",
     "segment_adaptive_restart":   "#9467bd",
+    # Gaussian variants — lighter tints of their CP counterparts
+    "random_gauss":               "#cccccc",
+    "uncertainty_gauss":          "#aec7e8",
+    "error_based_gauss":          "#ffbb78",
+    "segment_adaptive_gauss":     "#c5b0d5",
+    "disruption_gauss":           "#f7b6b6",
 }
 
 METRIC_OPTIONS = {
@@ -706,3 +718,51 @@ with tab3:
                 for w in info["weaknesses"]:
                     st.markdown(f"- {w}")
             st.markdown(f"**When to use:** {info['when']}")
+
+    st.divider()
+    st.subheader("Gaussian-perturbation variants  `(*_gauss)`")
+    st.markdown(
+        "Each CP strategy above has a Gaussian counterpart that uses the same anchor-selection "
+        "logic but replaces the ceteris-paribus profile generator with **joint Gaussian perturbations**."
+    )
+    with st.expander("**How Gaussian profiles differ from ceteris-paribus profiles**", expanded=False):
+        st.markdown(
+            """
+Ceteris-paribus (CP) profiles vary **one feature at a time** across its full range while
+holding all other features fixed.  This gives dense 1-D coverage of each marginal effect but
+provides no joint-feature variation within a single anchor's batch — LightGBM must infer
+interactions from the way different anchors happen to combine.
+
+Gaussian profiles vary **all continuous features simultaneously**.  For each anchor, N profiles
+are drawn by adding independent Gaussian noise to every continuous feature:
+
+> σ_feature = sigma_frac × (feature_max − feature_min)
+
+Values are clipped to the valid feature range and then constraint-validated (e.g.
+`licence_age ≤ driver_age − 18`).  With the default `sigma_frac = 0.3`, the profiles stay
+within roughly one standard deviation of the anchor's own values, preserving the anchor's
+natural context (e.g. a young-driver anchor generates young-driver profiles) while exposing
+the model to real joint-feature variation.
+
+**Budget parity:** the number of profiles per anchor is set equal to the CP constant (254),
+so both profile types consume identical weekly budgets and results are directly comparable.
+
+**Key hypothesis:** if joint profiles allow LightGBM to learn interaction effects more
+efficiently than 1-D CP sweeps, Gaussian strategies should converge faster — especially
+when the AL strategy is already targeting the right anchors.
+            """
+        )
+    gauss_strategies_info = [
+        ("Random (Gaussian)",             "random_gauss",           "Same as Random but profiles are joint Gaussian perturbations instead of 1-D CP sweeps. The primary baseline for testing whether the profile generator matters independently of anchor selection."),
+        ("Uncertainty (Gaussian)",        "uncertainty_gauss",      "Bootstrap uncertainty scoring selects anchors; Gaussian profiles are generated from them. Tests whether joint variation amplifies the uncertainty strategy's coverage gains."),
+        ("Error-based (Gaussian)",        "error_based_gauss",      "Proxy-model error scoring selects anchors in high-error regions; Gaussian profiles keep the budget focused there while varying features jointly."),
+        ("Segment-adaptive (Gaussian)",   "segment_adaptive_gauss", "Segment RMSE allocation selects anchors; Gaussian profiles ensure the chosen segment receives varied joint coverage rather than axis-aligned sweeps."),
+        ("Disruption-adaptive (Gaussian)","disruption_gauss",       "Disruption detection selects anchors in newly-shocked segments; Gaussian profiles help the model recover interactions disrupted by the tariff change."),
+    ]
+    for name, key, desc in gauss_strategies_info:
+        with st.expander(f"**{name}**  —  {desc}", expanded=False):
+            st.markdown(
+                f"Identical anchor-selection logic to **{STRATEGY_LABELS[key.replace('_gauss', '')]}** "
+                f"above. The only difference is the profile generator: joint Gaussian perturbations "
+                f"instead of ceteris-paribus sweeps. See the explainer above for details."
+            )
