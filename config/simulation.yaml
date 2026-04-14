@@ -99,13 +99,22 @@ simulations:
 #   Has no effect on the 'random' strategy.
 
 advanced:
-  # candidate_multiplier: informativeness strategies score
-  #   (n_anchors × candidate_multiplier) candidates per week and keep the top
-  #   n_anchors.  A higher value expands the selection space and improves
-  #   selection quality at the cost of slower scoring.
-  #   Only relevant for: uncertainty, error_based, segment_adaptive, disruption.
-  #   Has no effect on: random, random_market.
-  candidate_multiplier: 10
+  # Anchor pool sizing (CP and Gaussian strategies; ignored for random_market).
+  #
+  # n_anchors_base = weekly_budget // profiles_per_anchor   (e.g. 5000 // 254 = 19)
+  #
+  # anchor_space_multiplier : total pool size = n_anchors_base × multiplier
+  #   All candidates are scored by the query strategy.
+  #   Larger values give strategies more room to differentiate but increase
+  #   scoring cost.
+  #
+  # selection_fraction : share of the pool selected for profile generation
+  #   n_selected = round(pool_size × selection_fraction)   (e.g. 570 × 0.10 = 57)
+  #   Profiles are generated from n_selected anchors, then sampled down to
+  #   weekly_budget.  Increase if the budget is not being fully utilised due
+  #   to Gaussian validation dropout.
+  anchor_space_multiplier: 30
+  selection_fraction: 0.10
 
   # Market composition assumption: fraction of aggregator traffic not covered
   # by the competitor's portfolio (i.e. profiles where the competitor quotes
@@ -126,11 +135,3 @@ advanced:
   # each continuous feature's range.  0.3 → σ ≈ 30 % of range per feature,
   # keeping profiles near the anchor while varying all features jointly.
   gaussian_sigma_frac: 0.3
-
-  # Profile pool over-generation factor (CP and Gaussian strategies).
-  # Selects n_anchors_base × profile_pool_multiplier anchors, generates all
-  # their profiles, then samples weekly_budget from the pool.
-  # Benefits: (a) offsets Gaussian validation dropout, (b) more diverse spatial
-  # coverage per week by using more anchor points.
-  # Set to 1 to disable (original behaviour: generate exactly n_anchors_base anchors).
-  profile_pool_multiplier: 3

@@ -14,7 +14,7 @@ Usage
     simulations = resolve_simulations(sim_cfg, tc_library)
 
     # sim_cfg keys:
-    #   n_weeks, weekly_budget, candidate_multiplier, seed,
+    #   n_weeks, weekly_budget, anchor_space_multiplier, selection_fraction, seed,
     #   strategies, metrics, compute_shap_similarity, restart_strategies,
     #   market_cp_ratio, random_market_n_cp_anchors, gaussian_sigma_frac
 
@@ -58,14 +58,14 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
     cfg["simulations_raw"]     = list(raw.get("simulations") or [])
 
     advanced = raw.get("advanced") or {}
-    cfg["candidate_multiplier"]    = int(advanced.get("candidate_multiplier", 10))
+    cfg["anchor_space_multiplier"] = int(advanced.get("anchor_space_multiplier", 30))
+    cfg["selection_fraction"]      = float(advanced.get("selection_fraction", 0.10))
     cfg["market_cp_ratio"]         = float(advanced.get("market_cp_ratio", 0.10))
 
     rm = advanced.get("random_market") or {}
     cfg["random_market_n_cp_anchors"] = int(rm.get("n_cp_anchors", 50))
 
     cfg["gaussian_sigma_frac"]      = float(advanced.get("gaussian_sigma_frac", 0.3))
-    cfg["profile_pool_multiplier"]  = int(advanced.get("profile_pool_multiplier", 3))
 
     metrics = set(raw.get("metrics", list(_VALID_METRICS)))
     unknown = metrics - _VALID_METRICS

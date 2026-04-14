@@ -157,13 +157,13 @@ class ALSimulation:
         warm_start_y: np.ndarray,
         weekly_budget: int = 5_000,
         n_weeks: int = 52,
-        candidate_multiplier: int = 10,
+        anchor_space_multiplier: int = 30,
+        selection_fraction: float = 0.10,
         tariff_changes: list[tuple[int, Any]] | None = None,
         restart_at_tariff_change: bool = False,
         random_market_n_cp_anchors: int = _RANDOM_MARKET_N_CP_ANCHORS,
         market_cp_ratio: float = _RANDOM_MARKET_CP_RATIO,
         gaussian_sigma_frac: float = 0.3,
-        profile_pool_multiplier: int = 3,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -178,14 +178,19 @@ class ALSimulation:
             Oracle labels for warm_start_X (aligned 1-D array).
         weekly_budget : int
             Target number of profiles to scrape per week.
-            Converted to anchors as: n_anchors = weekly_budget // PROFILES_PER_ANCHOR.
+            Base anchor count: n_anchors_base = weekly_budget // PROFILES_PER_ANCHOR.
         n_weeks : int
             Number of AL rounds after the warm start.
-        candidate_multiplier : int
-            The strategy scores (candidate_multiplier × n_anchors) candidate
-            anchors each week and selects the best n_anchors from that pool.
-            Higher values give strategies more room to differentiate but
-            increase scoring time.  Ignored for 'random'.
+        anchor_space_multiplier : int
+            Total anchor pool size = n_anchors_base × anchor_space_multiplier.
+            All candidates in the pool are scored by the query strategy.
+            Higher values give the strategy more candidates to differentiate
+            but increase scoring time.  Ignored for 'random_market'.
+        selection_fraction : float
+            Fraction of the scored pool selected for profile generation.
+            n_selected = max(1, round(pool_size × selection_fraction)).
+            Increase if the weekly budget is not being fully utilised due to
+            Gaussian validation dropout.  Ignored for 'random_market'.
         tariff_changes : list of (week, PerturbedOracleEngine), optional
             Sequence of oracle switch events applied within this single run,
             sorted by week.  At each scheduled week the oracle switches and
@@ -211,17 +216,6 @@ class ALSimulation:
             Noise width for ``*_gauss`` strategies, expressed as a fraction of
             each feature's range.  E.g. 0.3 → σ ≈ 30 % of range per feature.
             Has no effect on non-Gaussian strategies.
-        profile_pool_multiplier : int
-            Over-generation factor for CP and Gaussian strategies.  The strategy
-            selects ``n_anchors_base × profile_pool_multiplier`` anchors, all
-            their profiles are generated, then a random sample of ``weekly_budget``
-            is drawn from the pool.  Benefits:
-            (a) Gaussian: compensates for constraint-validation dropout so the
-                labeled set always grows by ~weekly_budget rows.
-            (b) Both: more diverse anchors per week → broader spatial coverage,
-                reducing the risk of repeatedly sampling the same local region.
-            A value of 1 disables over-generation (original behaviour).
-            Has no effect on ``random_market``.
 
         Returns
         -------
@@ -248,10 +242,10 @@ class ALSimulation:
         tc_schedule: list[tuple[int, Any]] = sorted(tariff_changes or [], key=lambda x: x[0])
         tc_weeks = {w for w, _ in tc_schedule}
 
-        ppa             = GAUSSIAN_PROFILES_PER_ANCHOR if is_gauss else PROFILES_PER_ANCHOR
-        n_anchors_base  = max(1, weekly_budget // ppa)
-        n_anchors       = n_anchors_base * profile_pool_multiplier
-        n_candidates    = n_anchors * candidate_multiplier
+        ppa            = GAUSSIAN_PROFILES_PER_ANCHOR if is_gauss else PROFILES_PER_ANCHOR
+        n_anchors_base = max(1, weekly_budget // ppa)
+        n_pool         = n_anchors_base * anchor_space_multiplier
+        n_selected     = max(1, round(n_pool * selection_fraction))
 
         rng = np.random.default_rng(int(self._master_rng.integers(0, 2**31)))
 
@@ -278,12 +272,12 @@ class ALSimulation:
             print(f"  per week: {n_cp} from CP pool + {n_real} from real pool")
         elif is_gauss:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
-                  f"  n_anchors/week={n_anchors} (×{profile_pool_multiplier})  candidates/week={n_candidates}"
+                  f"  n_anchors_base={n_anchors_base}  pool={n_pool}  selected={n_selected}"
                   f"  sigma_frac={gaussian_sigma_frac}  weeks={n_weeks}")
         else:  # CP strategies (_cp suffix)
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
-                  f"  n_anchors/week={n_anchors} (×{profile_pool_multiplier})"
-                  f"  candidates/week={n_candidates}  weeks={n_weeks}")
+                  f"  n_anchors_base={n_anchors_base}  pool={n_pool}  selected={n_selected}"
+                  f"  weeks={n_weeks}")
         if tc_schedule:
             changes_str = ", ".join(f"week {w}" for w, _ in tc_schedule)
             print(f"  tariff changes at: {changes_str}"
@@ -395,12 +389,12 @@ class ALSimulation:
 
             else:
                 # ── CP-anchor and Gaussian strategies ─────────────────────────
-                cand_idx = rng.choice(self._anchor_pool_idx, size=n_candidates, replace=False)
+                cand_idx = rng.choice(self._anchor_pool_idx, size=n_pool, replace=False)
                 candidate_anchors = self._real_X.iloc[cand_idx].reset_index(drop=True)
 
                 chosen_local = self._apply_strategy(
                     base_strategy, competitor, labeled_X, labeled_y,
-                    candidate_anchors, n_anchors, rng,
+                    candidate_anchors, n_selected, rng,
                     prev_seg_rmses=prev_seg_rmses,
                 )
                 selected_anchors = candidate_anchors.iloc[chosen_local]
