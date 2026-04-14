@@ -323,23 +323,35 @@ with st.sidebar:
     n_weeks = df_all["week"].max()
 
     st.subheader("Strategies")
-    base_strategies    = [s for s in STRATEGY_LABELS if not s.endswith("_restart")]
-    restart_strategies = [s for s in STRATEGY_LABELS if s.endswith("_restart")]
 
-    selected_base = [
-        s for s in base_strategies
-        if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}")
-    ]
+    available = df_all["strategy"].unique()
 
-    st.caption("Restart variants")
-    # Only show restart variants that exist in the results
-    available_restarts = [s for s in restart_strategies if s in df_all["strategy"].unique()]
-    selected_restarts = [
-        s for s in available_restarts
-        if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}")
-    ]
+    cp_strategies      = [s for s in STRATEGY_LABELS if s.endswith("_cp")]
+    gauss_strategies   = [s for s in STRATEGY_LABELS if s.endswith("_gauss")]
+    restart_strategies = [s for s in STRATEGY_LABELS if s.endswith("_restart")
+                          and s in available]
 
-    selected_strategies = selected_base + selected_restarts
+    selected_strategies = []
+
+    # random_market stands alone — not CP, not Gaussian
+    if st.checkbox(STRATEGY_LABELS["random_market"], value=True, key="chk_random_market"):
+        selected_strategies.append("random_market")
+
+    with st.expander("CP strategies", expanded=False):
+        for s in cp_strategies:
+            if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
+                selected_strategies.append(s)
+
+    with st.expander("Gaussian strategies", expanded=False):
+        for s in gauss_strategies:
+            if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
+                selected_strategies.append(s)
+
+    if restart_strategies:
+        with st.expander("Restart variants", expanded=False):
+            for s in restart_strategies:
+                if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
+                    selected_strategies.append(s)
 
     st.subheader("About")
     n_rows = df_all["n_labeled"].max()
