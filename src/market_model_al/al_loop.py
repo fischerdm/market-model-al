@@ -57,7 +57,12 @@ import shap
 from sklearn.metrics import mean_squared_error
 
 from market_model_al.competitor_model import CompetitorModel
-from market_model_al.profile_generator import generate_ceteris_paribus, PROFILES_PER_ANCHOR
+from market_model_al.profile_generator import (
+    generate_ceteris_paribus,
+    generate_gaussian_profiles,
+    PROFILES_PER_ANCHOR,
+    GAUSSIAN_PROFILES_PER_ANCHOR,
+)
 from market_model_al.segments import segment_rmse, segment_rel_rmse
 from market_model_al.strategies import (
     STRATEGIES,
@@ -152,11 +157,13 @@ class ALSimulation:
         warm_start_y: np.ndarray,
         weekly_budget: int = 5_000,
         n_weeks: int = 52,
-        candidate_multiplier: int = 10,
+        anchor_space_multiplier: int = 30,
+        selection_fraction: float = 0.10,
         tariff_changes: list[tuple[int, Any]] | None = None,
         restart_at_tariff_change: bool = False,
         random_market_n_cp_anchors: int = _RANDOM_MARKET_N_CP_ANCHORS,
         market_cp_ratio: float = _RANDOM_MARKET_CP_RATIO,
+        gaussian_sigma_frac: float = 0.3,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -171,14 +178,19 @@ class ALSimulation:
             Oracle labels for warm_start_X (aligned 1-D array).
         weekly_budget : int
             Target number of profiles to scrape per week.
-            Converted to anchors as: n_anchors = weekly_budget // PROFILES_PER_ANCHOR.
+            Base anchor count: n_anchors_base = weekly_budget // PROFILES_PER_ANCHOR.
         n_weeks : int
             Number of AL rounds after the warm start.
-        candidate_multiplier : int
-            The strategy scores (candidate_multiplier × n_anchors) candidate
-            anchors each week and selects the best n_anchors from that pool.
-            Higher values give strategies more room to differentiate but
-            increase scoring time.  Ignored for 'random'.
+        anchor_space_multiplier : int
+            Total anchor pool size = n_anchors_base × anchor_space_multiplier.
+            All candidates in the pool are scored by the query strategy.
+            Higher values give the strategy more candidates to differentiate
+            but increase scoring time.  Ignored for 'random_market'.
+        selection_fraction : float
+            Fraction of the scored pool selected for profile generation.
+            n_selected = max(1, round(pool_size × selection_fraction)).
+            Increase if the weekly budget is not being fully utilised due to
+            Gaussian validation dropout.  Ignored for 'random_market'.
         tariff_changes : list of (week, PerturbedOracleEngine), optional
             Sequence of oracle switch events applied within this single run,
             sorted by week.  At each scheduled week the oracle switches and
@@ -200,6 +212,10 @@ class ALSimulation:
             Represents the degree to which the competitor's portfolio
             under-covers the aggregator space.  Should match the value used to
             build the warm start.  E.g. 0.10 → 10 % CP profiles, 90 % real rows.
+        gaussian_sigma_frac : float
+            Noise width for ``*_gauss`` strategies, expressed as a fraction of
+            each feature's range.  E.g. 0.3 → σ ≈ 30 % of range per feature.
+            Has no effect on non-Gaussian strategies.
 
         Returns
         -------
@@ -211,12 +227,25 @@ class ALSimulation:
         if strategy not in STRATEGIES:
             raise ValueError(f"Unknown strategy '{strategy}'.  Choose from {STRATEGIES}.")
 
+        # Both CP (_cp) and Gaussian (_gauss) strategies share the same selection logic;
+        # only the profile generator differs.  Strip the suffix to get the dispatch key.
+        is_gauss      = strategy.endswith("_gauss")
+        is_cp         = strategy.endswith("_cp")
+        if is_gauss:
+            base_strategy = strategy[:-6]   # strip "_gauss" (6 chars) → e.g. "random"
+        elif is_cp:
+            base_strategy = strategy[:-3]   # strip "_cp"    (3 chars) → e.g. "random"
+        else:
+            base_strategy = strategy        # "random_market" — no suffix
+
         # Sort change events by week and build a fast lookup set
         tc_schedule: list[tuple[int, Any]] = sorted(tariff_changes or [], key=lambda x: x[0])
         tc_weeks = {w for w, _ in tc_schedule}
 
-        n_anchors    = max(1, weekly_budget // PROFILES_PER_ANCHOR)
-        n_candidates = n_anchors * candidate_multiplier
+        ppa            = GAUSSIAN_PROFILES_PER_ANCHOR if is_gauss else PROFILES_PER_ANCHOR
+        n_anchors_base = max(1, weekly_budget // ppa)
+        n_pool         = n_anchors_base * anchor_space_multiplier
+        n_selected     = max(1, round(n_pool * selection_fraction))
 
         rng = np.random.default_rng(int(self._master_rng.integers(0, 2**31)))
 
@@ -241,9 +270,14 @@ class ALSimulation:
                   f"  n_cp_anchors={random_market_n_cp_anchors}"
                   f"  cp_ratio={market_cp_ratio}  weeks={n_weeks}")
             print(f"  per week: {n_cp} from CP pool + {n_real} from real pool")
-        else:
+        elif is_gauss:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
-                  f"  n_anchors/week={n_anchors}  candidates/week={n_candidates}  weeks={n_weeks}")
+                  f"  n_anchors_base={n_anchors_base}  pool={n_pool}  selected={n_selected}"
+                  f"  sigma_frac={gaussian_sigma_frac}  weeks={n_weeks}")
+        else:  # CP strategies (_cp suffix)
+            print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
+                  f"  n_anchors_base={n_anchors_base}  pool={n_pool}  selected={n_selected}"
+                  f"  weeks={n_weeks}")
         if tc_schedule:
             changes_str = ", ".join(f"week {w}" for w, _ in tc_schedule)
             print(f"  tariff changes at: {changes_str}"
@@ -354,20 +388,37 @@ class ALSimulation:
                     continue
 
             else:
-                # ── CP-anchor strategies ──────────────────────────────────────
-                cand_idx = rng.choice(self._anchor_pool_idx, size=n_candidates, replace=False)
+                # ── CP-anchor and Gaussian strategies ─────────────────────────
+                cand_idx = rng.choice(self._anchor_pool_idx, size=n_pool, replace=False)
                 candidate_anchors = self._real_X.iloc[cand_idx].reset_index(drop=True)
 
                 chosen_local = self._apply_strategy(
-                    strategy, competitor, labeled_X, labeled_y,
-                    candidate_anchors, n_anchors, rng,
+                    base_strategy, competitor, labeled_X, labeled_y,
+                    candidate_anchors, n_selected, rng,
                     prev_seg_rmses=prev_seg_rmses,
                 )
                 selected_anchors = candidate_anchors.iloc[chosen_local]
 
-                profiles = generate_ceteris_paribus(selected_anchors, validate=True)
+                if is_gauss:
+                    profiles = generate_gaussian_profiles(
+                        selected_anchors,
+                        n_per_anchor=ppa,
+                        sigma_frac=gaussian_sigma_frac,
+                        rng=rng,
+                        validate=True,
+                    )
+                else:
+                    profiles = generate_ceteris_paribus(selected_anchors, validate=True)
                 if len(profiles) == 0:
                     continue
+
+                # Sample down to weekly_budget when the pool exceeds it.
+                # This ensures every strategy adds exactly ~weekly_budget rows
+                # per week, including Gaussian strategies whose validation
+                # dropout is offset by the profile_pool_multiplier.
+                if len(profiles) > weekly_budget:
+                    sample_idx = rng.choice(len(profiles), size=weekly_budget, replace=False)
+                    profiles = profiles.iloc[sample_idx].reset_index(drop=True)
 
             # ── Label with current oracle ─────────────────────────────────────
             labels = current_oracle.query(profiles)

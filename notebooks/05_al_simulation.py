@@ -49,23 +49,26 @@ simulations = resolve_simulations(sim_cfg, tc_library)
 
 N_WEEKS:           int       = sim_cfg["n_weeks"]
 WEEKLY_BUDGET:     int       = sim_cfg["weekly_budget"]
-CANDIDATE_MULT:    int       = sim_cfg["candidate_multiplier"]
+ANCHOR_SPACE_MULT: int       = sim_cfg["anchor_space_multiplier"]
+SELECTION_FRAC:    float     = sim_cfg["selection_fraction"]
 SEED:              int       = sim_cfg["seed"]
 STRATEGIES_RUN:    list[str] = sim_cfg["strategies"]
 RESTART_STRATS:    list[str] = sim_cfg["restart_strategies"]
 COMPUTE_SHAP:      bool      = sim_cfg["compute_shap_similarity"]
 RM_N_CP_ANCHORS:   int       = sim_cfg["random_market_n_cp_anchors"]
 MARKET_CP_RATIO:   float     = sim_cfg["market_cp_ratio"]
+GAUSSIAN_SIGMA:    float     = sim_cfg["gaussian_sigma_frac"]
 
 print("Simulation config:")
-print(f"  n_weeks={N_WEEKS}  weekly_budget={WEEKLY_BUDGET}  "
-      f"candidate_multiplier={CANDIDATE_MULT}  seed={SEED}")
+print(f"  n_weeks={N_WEEKS}  weekly_budget={WEEKLY_BUDGET}  seed={SEED}")
+print(f"  anchor_space_multiplier={ANCHOR_SPACE_MULT}  selection_fraction={SELECTION_FRAC}")
 print(f"  strategies        : {STRATEGIES_RUN}")
 print(f"  restart_strategies: {RESTART_STRATS}")
 print(f"  metrics           : {sorted(sim_cfg['metrics'])}")
 print(f"  SHAP similarity   : {'enabled' if COMPUTE_SHAP else 'disabled'}")
 print(f"  market_cp_ratio   : {MARKET_CP_RATIO}  (warm start + random_market)")
 print(f"  random_market     : n_cp_anchors={RM_N_CP_ANCHORS}")
+print(f"  gaussian_sigma    : {GAUSSIAN_SIGMA}")
 print(f"\nSimulations ({len(simulations)}):")
 for s in simulations:
     if s["has_tariff_changes"]:
@@ -84,15 +87,21 @@ for d in [RESULTS_DIR, FIGURES_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 PALETTE = {
-    "random":                   "#888888",
-    "random_market":            "#17becf",
-    "uncertainty":              "#1f77b4",
-    "error_based":              "#ff7f0e",
-    "segment_adaptive":         "#9467bd",
-    "disruption":               "#2ca02c",
-    "random_restart":           "#bbbbbb",
-    "segment_adaptive_restart": "#c5b0d5",
-    "disruption_restart":       "#98df8a",
+    # CP strategies
+    "random_cp":                    "#888888",
+    "random_market":                "#17becf",
+    "uncertainty_cp":               "#1f77b4",
+    "error_based_cp":               "#ff7f0e",
+    "segment_adaptive_cp":          "#9467bd",
+    "disruption_cp":                "#2ca02c",
+    "random_cp_restart":            "#bbbbbb",
+    "segment_adaptive_cp_restart":  "#c5b0d5",
+    # Gaussian variants — lighter tints of their CP counterparts
+    "random_gauss":                 "#cccccc",
+    "uncertainty_gauss":            "#aec7e8",
+    "error_based_gauss":            "#ffbb78",
+    "segment_adaptive_gauss":       "#c5b0d5",
+    "disruption_gauss":             "#98df8a",
 }
 
 # ── Load warm start ────────────────────────────────────────────────────────────
@@ -132,12 +141,14 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
         warm_start_X=warm_start_X,
         warm_start_y=warm_start_y,
         weekly_budget=WEEKLY_BUDGET,
-        candidate_multiplier=CANDIDATE_MULT,
+        anchor_space_multiplier=ANCHOR_SPACE_MULT,
+        selection_fraction=SELECTION_FRAC,
         n_weeks=N_WEEKS,
         tariff_changes=tc_pairs or None,
         restart_at_tariff_change=restart,
         random_market_n_cp_anchors=RM_N_CP_ANCHORS,
         market_cp_ratio=MARKET_CP_RATIO,
+        gaussian_sigma_frac=GAUSSIAN_SIGMA,
     )
     df_run["simulation"] = sim_name
     if strategy_label is not None:
