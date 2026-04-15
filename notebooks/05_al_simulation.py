@@ -94,8 +94,10 @@ PALETTE = {
     "error_based_cp":               "#ff7f0e",
     "segment_adaptive_cp":          "#9467bd",
     "disruption_cp":                "#2ca02c",
-    "random_cp_restart":            "#bbbbbb",
-    "segment_adaptive_cp_restart":  "#c5b0d5",
+    "random_cp_restart":                "#bbbbbb",
+    "segment_adaptive_cp_restart":      "#c5b0d5",
+    "random_gauss_restart":             "#dddddd",
+    "segment_adaptive_gauss_restart":   "#ddd0ee",
     # Gaussian variants — lighter tints of their CP counterparts
     "random_gauss":                 "#cccccc",
     "uncertainty_gauss":            "#aec7e8",

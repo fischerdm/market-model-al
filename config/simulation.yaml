@@ -53,6 +53,8 @@ metrics:
 restart_strategies:
   - random_cp
   - segment_adaptive_cp
+  - random_gauss
+  - segment_adaptive_gauss
 
 # ── Simulations ──────────────────────────────────────────────────────────────
 # Each entry is one named simulation run per strategy.
