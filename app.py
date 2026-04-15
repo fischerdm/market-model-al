@@ -651,19 +651,19 @@ with tab3:
                 "This strategy models that gap explicitly: each week it generates a CP pool "
                 "from a small number of random anchors, then draws a fixed fraction of the "
                 "weekly budget from that pool (default 10 %) and the remainder from the real "
-                "portfolio rows. The split is controlled by `market_cp_ratio` in `simulation.yaml` "
+                "portfolio rows. The split is controlled by `market_supplement_ratio` in `simulation.yaml` "
                 "and is applied consistently to the warm start as well, so the two phases share "
                 "the same market composition assumption."
             ),
             "strengths": [
                 "Represents the true market space — not just the competitor's written portfolio.",
-                "Consistent with the warm start: both use the same `market_cp_ratio`.",
+                "Consistent with the warm start: both use the same `market_supplement_ratio` and `market_profile_method`.",
                 "No informativeness scoring required — fast and simple like random.",
                 "The CP ratio and anchor count are independently configurable.",
             ],
             "weaknesses": [
                 "CP pool generation adds overhead compared to pure random sampling.",
-                "The market_cp_ratio is a modelling assumption that must be set externally.",
+                "The `market_supplement_ratio` and `market_profile_method` are modelling assumptions that must be set externally.",
                 "Like random, it ignores where the competitor model is currently wrong.",
             ],
             "when": "Use as the primary benchmark when the competitor's portfolio is known to be selective — i.e. when pure random from the portfolio would under-represent segments the competitor prices but doesn't write.",

@@ -60,6 +60,7 @@ from market_model_al.competitor_model import CompetitorModel
 from market_model_al.profile_generator import (
     generate_ceteris_paribus,
     generate_gaussian_profiles,
+    create_market_supplement,
     PROFILES_PER_ANCHOR,
     GAUSSIAN_PROFILES_PER_ANCHOR,
 )
@@ -73,9 +74,10 @@ from market_model_al.strategies import (
     disruption_query,
 )
 
-# Default random_market hyperparameters (overridable via run())
-_RANDOM_MARKET_N_CP_ANCHORS = 50
-_RANDOM_MARKET_CP_RATIO     = 0.10
+# Default market supplement hyperparameters (overridable via run())
+_MARKET_N_ANCHORS        = 50
+_MARKET_SUPPLEMENT_RATIO = 0.10
+_MARKET_PROFILE_METHOD   = "cp"
 
 
 _HOLDOUT_N = 5_000   # fixed holdout size, carved from real_X at construction time
@@ -161,8 +163,9 @@ class ALSimulation:
         selection_fraction: float = 0.10,
         tariff_changes: list[tuple[int, Any]] | None = None,
         restart_at_tariff_change: bool = False,
-        random_market_n_cp_anchors: int = _RANDOM_MARKET_N_CP_ANCHORS,
-        market_cp_ratio: float = _RANDOM_MARKET_CP_RATIO,
+        market_n_anchors: int = _MARKET_N_ANCHORS,
+        market_supplement_ratio: float = _MARKET_SUPPLEMENT_RATIO,
+        market_profile_method: str = _MARKET_PROFILE_METHOD,
         gaussian_sigma_frac: float = 0.3,
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
@@ -202,16 +205,20 @@ class ALSimulation:
             week's evaluation.  The model re-learns from scratch using only
             profiles labeled by the new oracle.  Applied at *every* change week,
             not just the first.
-        random_market_n_cp_anchors : int
-            (random_market only) Number of random anchors from which CP profiles
-            are generated each week.  More anchors → broader CP coverage of the
+        market_n_anchors : int
+            (random_market only) Number of random anchors used to generate the
+            supplement pool each week.  More anchors → broader coverage of the
             aggregator space, but higher generation cost.
-        market_cp_ratio : float
-            Fraction of weekly_budget drawn from the CP pool (random_market
-            strategy only); the remainder is drawn from the real anchor pool.
-            Represents the degree to which the competitor's portfolio
-            under-covers the aggregator space.  Should match the value used to
-            build the warm start.  E.g. 0.10 → 10 % CP profiles, 90 % real rows.
+        market_supplement_ratio : float
+            Fraction of weekly_budget drawn from the supplement pool
+            (random_market strategy only); the remainder is real portfolio rows.
+            Represents segments where the insurer is uncompetitive and writes
+            no business.  Should match the value used to build the warm start.
+            E.g. 0.10 → 10 % synthetic supplement, 90 % real rows.
+        market_profile_method : str
+            Profile generation method for the supplement: ``"cp"`` for
+            ceteris-paribus sweeps or ``"gaussian"`` for joint Gaussian
+            perturbations.  Should match the value used to build the warm start.
         gaussian_sigma_frac : float
             Noise width for ``*_gauss`` strategies, expressed as a fraction of
             each feature's range.  E.g. 0.3 → σ ≈ 30 % of range per feature.
@@ -264,12 +271,14 @@ class ALSimulation:
 
         print(f"Strategy : {strategy}")
         if strategy == "random_market":
-            n_cp = int(weekly_budget * market_cp_ratio)
-            n_real = weekly_budget - n_cp
+            n_supplement = int(weekly_budget * market_supplement_ratio)
+            n_real = weekly_budget - n_supplement
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
-                  f"  n_cp_anchors={random_market_n_cp_anchors}"
-                  f"  cp_ratio={market_cp_ratio}  weeks={n_weeks}")
-            print(f"  per week: {n_cp} from CP pool + {n_real} from real pool")
+                  f"  market_n_anchors={market_n_anchors}"
+                  f"  supplement_ratio={market_supplement_ratio}"
+                  f"  method={market_profile_method}  weeks={n_weeks}")
+            print(f"  per week: {n_supplement} from {market_profile_method} pool"
+                  f" + {n_real} from real pool")
         elif is_gauss:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
                   f"  n_anchors_base={n_anchors_base}  pool={n_pool}  selected={n_selected}"
@@ -348,42 +357,35 @@ class ALSimulation:
                       "re-learning from new oracle only.", flush=True)
 
             if strategy == "random_market":
-                # ── random_market: stratified sampling from market space ──────
-                # Build CP pool from n_cp_anchors random anchors, then sample
-                # cp_ratio of weekly_budget from it and the remainder from the
-                # real anchor pool.  Mirrors aggregator traffic: mostly real
-                # portfolio rows, topped up with synthetic profiles that cover
-                # segments the competitor doesn't write.
-                n_cp_sample   = max(1, int(weekly_budget * market_cp_ratio))
-                n_real_sample = weekly_budget - n_cp_sample
+                # ── random_market: portfolio rows + synthetic supplement ───────
+                # Build a supplement pool from market_n_anchors random anchors
+                # using the configured method (cp or gaussian), sample
+                # supplement_ratio of weekly_budget from it, and fill the rest
+                # from real portfolio rows.  Mirrors aggregator traffic: mostly
+                # real portfolio rows, topped up with profiles from segments
+                # where the insurer is uncompetitive and writes no business.
+                n_supplement  = max(1, int(weekly_budget * market_supplement_ratio))
+                n_real_sample = weekly_budget - n_supplement
 
-                cp_anchor_idx = rng.choice(
+                anchor_idx = rng.choice(
                     self._anchor_pool_idx,
-                    size=random_market_n_cp_anchors,
+                    size=market_n_anchors,
                     replace=False,
                 )
-                cp_profiles = generate_ceteris_paribus(
-                    self._real_X.iloc[cp_anchor_idx].reset_index(drop=True),
-                    validate=True,
+                supplement = create_market_supplement(
+                    self._real_X.iloc[anchor_idx].reset_index(drop=True),
+                    n=n_supplement,
+                    method=market_profile_method,
+                    rng=rng,
+                    gaussian_sigma_frac=gaussian_sigma_frac,
                 )
-
-                # Draw from CP pool (replace=True if pool smaller than budget slice)
-                if len(cp_profiles) > 0:
-                    cp_sample_idx = rng.choice(
-                        len(cp_profiles),
-                        size=min(n_cp_sample, len(cp_profiles)),
-                        replace=n_cp_sample > len(cp_profiles),
-                    )
-                    cp_sample = cp_profiles.iloc[cp_sample_idx]
-                else:
-                    cp_sample = cp_profiles  # empty
 
                 # Sample real rows directly from anchor_pool_idx — avoids
                 # materialising the full ~100k-row pool as an intermediate DataFrame.
                 real_idx = rng.choice(self._anchor_pool_idx, size=n_real_sample, replace=False)
                 real_sample = self._real_X.iloc[real_idx].reset_index(drop=True)
 
-                profiles = pd.concat([cp_sample, real_sample], ignore_index=True)
+                profiles = pd.concat([supplement, real_sample], ignore_index=True)
                 if len(profiles) == 0:
                     continue
 

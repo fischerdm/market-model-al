@@ -1,19 +1,35 @@
 """
-Ceteris-paribus profile generator.
+Profile generators for the AL simulation.
 
-Builds candidate profiles by taking anchor rows and sweeping one continuous
-feature at a time across its range while holding all other features fixed.
-This mirrors how a real aggregator scraper probes a competitor's tariff.
+Builds candidate profiles from anchor rows using one of two methods:
+
+* Ceteris-paribus (CP) — sweeps one continuous feature at a time across its
+  full range while holding all other features fixed.  Mirrors how a systematic
+  aggregator scraper probes a competitor's tariff.
+
+* Gaussian perturbations — perturbs all continuous features simultaneously with
+  independent Gaussian noise.  Keeps profiles near the anchor while exposing
+  the model to joint feature variation.
+
+The shared helper ``create_market_supplement`` wraps both generators and is the
+single entry point for building the synthetic portion of the market (the
+10 % top-up in the warm start and the ``random_market`` strategy each week).
 
 Usage
 -----
-    from market_model_al.profile_generator import generate_ceteris_paribus
+    from market_model_al.profile_generator import (
+        generate_ceteris_paribus,
+        generate_gaussian_profiles,
+        create_market_supplement,
+    )
     from market_model_al.oracle_engine import OraclePricingEngine
 
     engine  = OraclePricingEngine("outputs/models/oracle.pkl")
     anchors = df[FEATURES].sample(100, random_state=42)
+    rng     = np.random.default_rng(42)
 
-    profiles = generate_ceteris_paribus(anchors)   # invalid rows dropped automatically
+    profiles = generate_ceteris_paribus(anchors)
+    supplement = create_market_supplement(anchors, n=500, method="gaussian", rng=rng)
     prices   = engine.query(profiles)
 """
 
@@ -194,3 +210,57 @@ def generate_gaussian_profiles(
         profiles = profiles[mask].reset_index(drop=True)
 
     return profiles
+
+
+def create_market_supplement(
+    anchors: pd.DataFrame,
+    n: int,
+    method: str,
+    rng: np.random.Generator,
+    gaussian_sigma_frac: float = 0.3,
+) -> pd.DataFrame:
+    """Generate and sample n supplement profiles from anchor rows.
+
+    Builds a pool using the requested method, then draws n rows from it
+    (with replacement if the pool is smaller than n).  Used consistently in
+    the warm start and the ``random_market`` strategy to represent the fraction
+    of aggregator traffic in segments where the insurer is uncompetitive and
+    therefore has no portfolio rows.
+
+    Parameters
+    ----------
+    anchors : pd.DataFrame
+        Anchor rows in engineered-feature space.
+    n : int
+        Number of profiles to return.
+    method : str
+        Profile generation method: ``"cp"`` for ceteris-paribus sweeps or
+        ``"gaussian"`` for joint Gaussian perturbations.
+    rng : np.random.Generator
+        RNG for reproducibility (used by the Gaussian generator and sampling).
+    gaussian_sigma_frac : float
+        Noise width as a fraction of each feature's range (Gaussian method
+        only; ignored for ``"cp"``).
+
+    Returns
+    -------
+    pd.DataFrame
+        Sampled profiles, index reset.  Empty DataFrame if pool generation
+        produces no valid profiles.
+    """
+    if method == "cp":
+        pool = generate_ceteris_paribus(anchors, validate=True)
+    elif method == "gaussian":
+        pool = generate_gaussian_profiles(
+            anchors, sigma_frac=gaussian_sigma_frac, rng=rng, validate=True
+        )
+    else:
+        raise ValueError(
+            f"Unknown market_profile_method '{method}'. Valid: 'cp', 'gaussian'."
+        )
+
+    if len(pool) == 0:
+        return pd.DataFrame(columns=anchors.columns)
+
+    sample_idx = rng.choice(len(pool), size=n, replace=n > len(pool))
+    return pool.iloc[sample_idx].reset_index(drop=True)
