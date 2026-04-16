@@ -68,6 +68,7 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
     cfg["market_n_anchors"] = int(rm.get("market_n_anchors", 50))
 
     cfg["gaussian_sigma_frac"]      = float(advanced.get("gaussian_sigma_frac", 0.3))
+    cfg["warmup_weeks"]             = int(advanced.get("warmup_weeks", 1))
     cfg["warmup_scale"]             = float(advanced.get("warmup_scale", 1.2))
 
     metrics = set(raw.get("metrics", list(_VALID_METRICS)))

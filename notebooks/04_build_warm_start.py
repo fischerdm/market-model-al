@@ -44,14 +44,16 @@ sim_cfg = load_simulation_cfg(ROOT / "config" / "simulation.yaml")
 
 SEED                    = sim_cfg["seed"]
 WEEKLY_BUDGET           = sim_cfg["weekly_budget"]
+WARMUP_WEEKS            = sim_cfg["warmup_weeks"]
 MARKET_SUPPLEMENT_RATIO = sim_cfg["market_supplement_ratio"]
 MARKET_N_ANCHORS        = sim_cfg["market_n_anchors"]
 MARKET_PROFILE_METHOD   = sim_cfg["market_profile_method"]
 GAUSSIAN_SIGMA          = sim_cfg["gaussian_sigma_frac"]
 WARMUP_SCALE            = sim_cfg["warmup_scale"]
 
-N_SUPPLEMENT = max(0, int(WEEKLY_BUDGET * MARKET_SUPPLEMENT_RATIO))
-N_REAL       = WEEKLY_BUDGET - N_SUPPLEMENT
+WARMUP_SIZE  = WEEKLY_BUDGET * WARMUP_WEEKS
+N_SUPPLEMENT = max(0, int(WARMUP_SIZE * MARKET_SUPPLEMENT_RATIO))
+N_REAL       = WARMUP_SIZE - N_SUPPLEMENT
 
 # Oversampling counts: draw more than needed to absorb validation dropout,
 # then trim to exact targets.
@@ -59,7 +61,9 @@ N_REAL_DRAW      = math.ceil(N_REAL * WARMUP_SCALE)
 N_ANCHOR_SCALE   = math.ceil(WARMUP_SCALE)   # e.g. ceil(1.2) = 2
 
 print("Warm start config (from simulation.yaml):")
-print(f"  weekly_budget={WEEKLY_BUDGET}  market_supplement_ratio={MARKET_SUPPLEMENT_RATIO}"
+print(f"  weekly_budget={WEEKLY_BUDGET}  warmup_weeks={WARMUP_WEEKS}"
+      f"  → warmup_size={WARMUP_SIZE:,}")
+print(f"  market_supplement_ratio={MARKET_SUPPLEMENT_RATIO}"
       f"  method={MARKET_PROFILE_METHOD}  warmup_scale={WARMUP_SCALE}")
 print(f"  → target: {N_REAL:,} real rows + {N_SUPPLEMENT:,} supplement rows"
       f"  (market_n_anchors={MARKET_N_ANCHORS} × {N_ANCHOR_SCALE} = {MARKET_N_ANCHORS * N_ANCHOR_SCALE})\n")
@@ -147,6 +151,8 @@ np.save(y_path, warm_start_y)
 
 metadata = {
     "weekly_budget"           : WEEKLY_BUDGET,
+    "warmup_weeks"            : WARMUP_WEEKS,
+    "warmup_size"             : WARMUP_SIZE,
     "market_supplement_ratio" : MARKET_SUPPLEMENT_RATIO,
     "market_profile_method"   : MARKET_PROFILE_METHOD,
     "market_n_anchors"        : MARKET_N_ANCHORS,

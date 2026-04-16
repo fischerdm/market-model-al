@@ -144,6 +144,11 @@ advanced:
   # keeping profiles near the anchor while varying all features jointly.
   gaussian_sigma_frac: 0.3
 
+  # Number of weeks of organic traffic to simulate in the warm start.
+  # warmup_size = warmup_weeks × weekly_budget  (e.g. 1 × 5 000 = 5 000 rows)
+  # Increase to seed the competitor model with more data before the AL loop begins.
+  warmup_weeks: 1
+
   # Warm-start oversampling factor (04_build_warm_start.py only).
   # Real rows: sample ceil(N_REAL × warmup_scale), validate, trim to N_REAL.
   # Supplement anchors: multiply by ceil(warmup_scale) before pool generation,
