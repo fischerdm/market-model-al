@@ -76,7 +76,7 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    - `restart_at_tariff_change=True` clears the labeled set after **every** tariff-change week's evaluation
 
    **Configuration system** (`config/`):
-   - `config/simulation.yaml` — global params (n_weeks, weekly_budget, seed, strategies, metrics, restart_strategies) and a `simulations` list; `advanced:` block contains `anchor_space_multiplier`, `selection_fraction`, `gaussian_sigma_frac`, `market_cp_ratio`, `random_market.n_cp_anchors`
+   - `config/simulation.yaml` — global params (n_weeks, weekly_budget, seed, strategies, metrics, restart_strategies) and a `simulations` list; `advanced:` block contains `anchor_space_multiplier`, `selection_fraction`, `gaussian_sigma_frac`, `market_supplement_ratio`, `market_profile_method`, `random_market.market_n_anchors`
    - `config/tariff_changes.yaml` — named perturbation library; definitions only, no timing
    - `src/market_model_al/config.py` — loader, resolver, perturbation factory
 
@@ -85,12 +85,12 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    2. Do Gaussian joint perturbations outperform CP sweeps by exposing LightGBM to multivariate variation within each anchor's batch?
 
    **Simulation findings (10-week run, 5 000 profiles/week)**:
-   - `random_market` clearly outperforms all CP strategies: real rows have natural feature correlations; LightGBM learns interactions far more efficiently
+   - `random_market` clearly outperforms **all** strategies — CP, Gaussian, and informativeness-based — both globally and in every segment
    - Among CP strategies, `random_cp` is competitive with all informativeness strategies globally
    - `error_based_cp` recovers the young-driver segment faster — commercially important
-   - Root cause: greedy strategies starve mainstream segments; random is representative by construction
+   - Root cause: greedy strategies starve mainstream segments; random is representative by construction; real portfolio rows carry natural feature correlations that CP and Gaussian synthetic profiles cannot replicate
    - Full restart after targeted tariff change is not always optimal; `disruption_cp` is the principled alternative
-   - Gaussian strategies: hypothesis is that joint variation enables faster interaction learning; results pending re-run with corrected anchor pool sizing
+   - Gaussian strategies perform comparably to their CP counterparts; joint variation does not compensate for the absence of natural feature correlations
 
 ### No copula / generative model
 The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly.

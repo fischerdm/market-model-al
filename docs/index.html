@@ -397,7 +397,7 @@
         </thead>
         <tbody>
           <tr><td>Random</td><td><code>_cp</code> · <code>_gauss</code></td><td>Uniform random anchor selection — no model required</td></tr>
-          <tr><td>Random market</td><td>—</td><td>90% real portfolio rows + 10% CP profiles from random anchors; models portfolio coverage gap in aggregator traffic</td></tr>
+          <tr><td>Random market</td><td>—</td><td>90% real portfolio rows + 10% synthetic supplement (CP or Gaussian) from random anchors; models portfolio coverage gap in aggregator traffic</td></tr>
           <tr><td>Uncertainty</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors with highest bootstrap prediction variance across ensemble members</td></tr>
           <tr><td>Error-based</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors with highest expected relative error, estimated by a proxy model trained on labeled residuals</td></tr>
           <tr><td>Segment-adaptive</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors scored by global + per-segment relative RMSE on the labeled set; converges toward random as segment gaps close</td></tr>
@@ -590,13 +590,19 @@
 
     <h3>Gaussian perturbations vs. ceteris-paribus profiles</h3>
     <p>
-      A second research axis tests whether varying all features simultaneously — rather
+      A second research axis tested whether varying all features simultaneously — rather
       than one at a time — produces training data that LightGBM can learn from more
       efficiently. Gaussian profiles keep each anchor's batch near its natural feature
-      context (via anchor-centred noise) while exposing the model to genuine joint-feature
-      variation, which CP sweeps systematically suppress. Results for this comparison are
-      pending a full re-run with the corrected anchor pool sizing.
+      context while exposing the model to genuine joint-feature variation, which CP sweeps
+      systematically suppress.
     </p>
+    <div class="callout result">
+      <strong>Gaussian strategies perform comparably to their CP counterparts.</strong>
+      Joint variation does not compensate for the absence of natural feature correlations.
+      Neither profile generator — CP nor Gaussian — can match real observed quotes, which
+      carry the full joint distribution of risk factors by construction. Both families are
+      beaten by <code>random_market</code> at every segment and globally.
+    </div>
   </section>
 
   <!-- ── REPO ── -->
