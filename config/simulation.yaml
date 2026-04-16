@@ -53,6 +53,8 @@ metrics:
 restart_strategies:
   - random_cp
   - segment_adaptive_cp
+  - random_gauss
+  - segment_adaptive_gauss
 
 # ── Simulations ──────────────────────────────────────────────────────────────
 # Each entry is one named simulation run per strategy.
@@ -121,17 +123,36 @@ advanced:
   # but does not write business).  Applied consistently to:
   #   - the warm start (notebooks/04_build_warm_start.py)
   #   - the random_market weekly sampling (al_loop.py)
-  # 0.10 → 10 % CP profiles, 90 % real portfolio rows.
-  market_cp_ratio: 0.10
+  # 0.10 → 10 % synthetic supplement, 90 % real portfolio rows.
+  market_supplement_ratio: 0.10
 
-  # random_market strategy: CP pool diversity.
-  # n_cp_anchors : anchors used to generate the CP pool each week
-  #                (more = broader coverage of the aggregator space,
-  #                 higher generation cost).  Does not affect the warm start.
+  # Supplement profile generation method.  Applied consistently to the warm
+  # start and the random_market strategy.
+  #   cp       — ceteris-paribus sweeps (axis-aligned, one feature at a time)
+  #   gaussian — joint Gaussian perturbations (all features perturbed together)
+  market_profile_method: gaussian
+
+  # random_market strategy: supplement pool diversity.
+  # market_n_anchors : anchors used to generate the supplement pool each week
+  #                    (more = broader coverage of the aggregator space,
+  #                     higher generation cost).  Does not affect the warm start.
   random_market:
-    n_cp_anchors: 50
+    market_n_anchors: 50
 
   # Gaussian-perturbation strategies (*_gauss): noise width as a fraction of
   # each continuous feature's range.  0.3 → σ ≈ 30 % of range per feature,
   # keeping profiles near the anchor while varying all features jointly.
   gaussian_sigma_frac: 0.3
+
+  # Number of weeks of organic traffic to simulate in the warm start.
+  # warmup_size = warmup_weeks × weekly_budget  (e.g. 1 × 5 000 = 5 000 rows)
+  # Increase to seed the competitor model with more data before the AL loop begins.
+  warmup_weeks: 1
+
+  # Warm-start oversampling factor (04_build_warm_start.py only).
+  # Real rows: sample ceil(N_REAL × warmup_scale), validate, trim to N_REAL.
+  # Supplement anchors: multiply by ceil(warmup_scale) before pool generation,
+  # then trim the sampled pool to N_SUPPLEMENT.
+  # This guarantees exact counts after constraint validation dropout.
+  # 1.2 → oversample by 20 % and 2× anchors (ceil(1.2) = 2).
+  warmup_scale: 1.2

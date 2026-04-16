@@ -55,8 +55,9 @@ SEED:              int       = sim_cfg["seed"]
 STRATEGIES_RUN:    list[str] = sim_cfg["strategies"]
 RESTART_STRATS:    list[str] = sim_cfg["restart_strategies"]
 COMPUTE_SHAP:      bool      = sim_cfg["compute_shap_similarity"]
-RM_N_CP_ANCHORS:   int       = sim_cfg["random_market_n_cp_anchors"]
-MARKET_CP_RATIO:   float     = sim_cfg["market_cp_ratio"]
+MARKET_N_ANCHORS:        int   = sim_cfg["market_n_anchors"]
+MARKET_SUPPLEMENT_RATIO: float = sim_cfg["market_supplement_ratio"]
+MARKET_PROFILE_METHOD:   str   = sim_cfg["market_profile_method"]
 GAUSSIAN_SIGMA:    float     = sim_cfg["gaussian_sigma_frac"]
 
 print("Simulation config:")
@@ -66,8 +67,9 @@ print(f"  strategies        : {STRATEGIES_RUN}")
 print(f"  restart_strategies: {RESTART_STRATS}")
 print(f"  metrics           : {sorted(sim_cfg['metrics'])}")
 print(f"  SHAP similarity   : {'enabled' if COMPUTE_SHAP else 'disabled'}")
-print(f"  market_cp_ratio   : {MARKET_CP_RATIO}  (warm start + random_market)")
-print(f"  random_market     : n_cp_anchors={RM_N_CP_ANCHORS}")
+print(f"  market_supplement_ratio : {MARKET_SUPPLEMENT_RATIO}"
+      f"  method={MARKET_PROFILE_METHOD}  (warm start + random_market)")
+print(f"  market_n_anchors        : {MARKET_N_ANCHORS}")
 print(f"  gaussian_sigma    : {GAUSSIAN_SIGMA}")
 print(f"\nSimulations ({len(simulations)}):")
 for s in simulations:
@@ -94,8 +96,10 @@ PALETTE = {
     "error_based_cp":               "#ff7f0e",
     "segment_adaptive_cp":          "#9467bd",
     "disruption_cp":                "#2ca02c",
-    "random_cp_restart":            "#bbbbbb",
-    "segment_adaptive_cp_restart":  "#c5b0d5",
+    "random_cp_restart":                "#bbbbbb",
+    "segment_adaptive_cp_restart":      "#c5b0d5",
+    "random_gauss_restart":             "#dddddd",
+    "segment_adaptive_gauss_restart":   "#ddd0ee",
     # Gaussian variants — lighter tints of their CP counterparts
     "random_gauss":                 "#cccccc",
     "uncertainty_gauss":            "#aec7e8",
@@ -146,8 +150,9 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
         n_weeks=N_WEEKS,
         tariff_changes=tc_pairs or None,
         restart_at_tariff_change=restart,
-        random_market_n_cp_anchors=RM_N_CP_ANCHORS,
-        market_cp_ratio=MARKET_CP_RATIO,
+        market_n_anchors=MARKET_N_ANCHORS,
+        market_supplement_ratio=MARKET_SUPPLEMENT_RATIO,
+        market_profile_method=MARKET_PROFILE_METHOD,
         gaussian_sigma_frac=GAUSSIAN_SIGMA,
     )
     df_run["simulation"] = sim_name

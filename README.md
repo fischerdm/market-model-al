@@ -23,7 +23,7 @@ The end deliverable is a **Streamlit dashboard** for interactively exploring and
 - **Ceteris-paribus (CP):** for each anchor row, each continuous feature is swept one at a time across its full range while all other features are held fixed. Produces 254 profiles per anchor. Mirrors standard aggregator scraping practice.
 - **Gaussian perturbations:** for each anchor row, all continuous features are perturbed simultaneously with independent Gaussian noise (σ = `gaussian_sigma_frac × feature_range`). Values are clipped and constraint-validated. Produces 254 profiles per anchor (same budget). Tests whether joint feature variation allows LightGBM to learn interaction effects more efficiently than axis-aligned CP sweeps.
 
-**Warm start** seeds the competitor model with ~5,000 real rows (≈ one week's scraping budget), simulating organic quote requests arriving via the aggregator before the systematic AL loop begins.
+**Warm start** seeds the competitor model with `warmup_weeks × weekly_budget` rows (default: 1 × 5,000 = 5,000), simulating organic quote requests arriving before the systematic AL loop begins. Composition mirrors `random_market`: real portfolio rows topped up with a synthetic supplement via `create_market_supplement()`. A `warmup_scale` factor (default 1.2) oversamples before validation to guarantee exact counts after constraint dropout.
 
 The **weekly AL loop** selects anchors using a query strategy, generates profiles, labels them via the oracle, and retrains the competitor model:
 
@@ -33,17 +33,17 @@ The **weekly AL loop** selects anchors using a query strategy, generates profile
 n_anchors_base  = weekly_budget // profiles_per_anchor   # e.g. 5 000 ÷ 254 = 19
 n_pool          = n_anchors_base × anchor_space_multiplier   # e.g. 19 × 30 = 570  (all scored)
 n_selected      = round(n_pool × selection_fraction)          # e.g. 570 × 10% = 57  (profiled)
-profiles        → sampled down to weekly_budget after generation
+profiles        → trimmed to weekly_budget from the top-ranked anchors first
 ```
 
-`anchor_space_multiplier` (default 30) controls how wide the candidate field is. `selection_fraction` (default 10%) controls what share is profiled — increase it if Gaussian validation dropout leaves the weekly budget under-utilised.
+`anchor_space_multiplier` (default 30) controls how wide the candidate field is. `selection_fraction` (default 10%) controls what share is profiled — increase it if Gaussian validation dropout leaves the weekly budget under-utilised. Trimming by rank means the highest-scoring anchors always contribute their profiles before lower-ranked ones are cut.
 
 **AL strategies** — each has a CP variant (`_cp`) and a Gaussian variant (`_gauss`):
 
 | Strategy | Query criterion | Deployable in practice? |
 |---|---|---|
 | `random_cp` / `random_gauss` | Uniform random anchor selection — no model required | Yes |
-| `random_market` | 90% real portfolio rows + 10% CP profiles from random anchors; split controlled by `market_cp_ratio` | Yes |
+| `random_market` | 90% real portfolio rows + 10% synthetic supplement (CP or Gaussian) from random anchors; split controlled by `market_supplement_ratio` | Yes |
 | `uncertainty_cp` / `_gauss` | Anchors where bootstrap prediction variance is highest | Yes |
 | `error_based_cp` / `_gauss` | Anchors with highest expected relative residual (proxy model on labeled data) | Yes |
 | `segment_adaptive_cp` / `_gauss` | Anchors scored by global + per-segment relative RMSE; converges toward random as gaps close | Yes |
@@ -63,9 +63,10 @@ Convergence is tracked in two metrics:
 
 | Finding | Detail |
 |---|---|
-| **Random market outperforms all CP-based strategies** | Labeling real portfolio rows and market-augmenting CP profiles produces training data with natural feature correlations — LightGBM learns interaction effects far more efficiently from these than from CP sweeps. |
+| **Random market outperforms all strategies** | Real portfolio rows carry natural joint feature correlations — LightGBM learns interaction effects far more efficiently from these than from any synthetic profiles (CP or Gaussian). Holds globally and in every segment. |
+| **Gaussian profiles do not close the gap** | Joint Gaussian perturbations perform comparably to their CP counterparts. Varying all features simultaneously does not compensate for the absence of natural feature correlations present in real observed quotes. |
 | **Random beats sophisticated CP strategies globally** | Among CP strategies, random anchor sampling matches or outperforms all informativeness-based strategies on global RMSE and SHAP cosine similarity at 10 weeks. |
-| **Error-based recovers young drivers faster** | Segment-level RMSE reveals that `error_based_cp` converges faster on young drivers (age < 30) — the one segment where sophistication pays. |
+| **Error-based recovers young drivers faster** | Segment-level RMSE reveals that `error_based_cp` converges faster on young drivers (age < 30) — the one segment where informativeness pays. |
 | **Root cause: informativeness vs. representativeness** | Greedy informativeness strategies pull budget toward high-signal edge cases, starving mainstream segments that random covers proportionally. |
 | **Restart is not always optimal** | After a targeted tariff change, a full restart discards valid labels from unchanged segments. Continuous scraping can win on global RMSE at week 10. |
 | **Disruption-adaptive** | Uses the week-on-week *change* in segment RMSE as a signal, not the absolute level. Fires on disruption, reverts to random once the gap closes, discards no labels. |
@@ -77,7 +78,9 @@ market-model-al/
 ├── config/
 │   ├── simulation.yaml         # n_weeks, budget, strategies, metrics, simulations list
 │   │                           # advanced: anchor_space_multiplier, selection_fraction,
-│   │                           #           gaussian_sigma_frac, market_cp_ratio
+│   │                           #           gaussian_sigma_frac, market_supplement_ratio,
+│   │                           #           market_profile_method, random_market.market_n_anchors,
+│   │                           #           warmup_weeks, warmup_scale
 │   └── tariff_changes.yaml     # named perturbation library (type + params, no timing)
 ├── data/
 │   ├── raw/                # Lledó & Pavía (2024) data (not committed)
@@ -88,7 +91,7 @@ market-model-al/
 │   ├── 01_oracle.py                    # fit and validate the oracle
 │   ├── 02_oracle_engine_smoke.py       # smoke test: OraclePricingEngine
 │   ├── 03_profile_generator_smoke.py   # smoke test: ceteris-paribus generator
-│   ├── 04_build_warm_start.py          # build warm start dataset (~5k real rows)
+│   ├── 04_build_warm_start.py          # build warm start (warmup_weeks × weekly_budget rows)
 │   ├── 05_al_simulation.py             # run all simulations, save results + figures
 │   └── 06_segment_summary.py           # segment distribution analysis + threshold calibration
 ├── src/
@@ -96,8 +99,8 @@ market-model-al/
 │       ├── features.py           # feature engineering
 │       ├── constraints.py        # physical validity rules (MIN_AGE_AT_LICENSING=18)
 │       ├── oracle_engine.py      # OraclePricingEngine: query(profiles) → prices
-│       ├── profile_generator.py  # generate_ceteris_paribus and generate_gaussian_profiles
-│       │                         # PROFILES_PER_ANCHOR = GAUSSIAN_PROFILES_PER_ANCHOR = 254
+│       ├── profile_generator.py  # generate_ceteris_paribus, generate_gaussian_profiles,
+│       │                         # create_market_supplement; PROFILES_PER_ANCHOR = 254
 │       ├── competitor_model.py   # CompetitorModel: LightGBM, retrained each iteration
 │       ├── strategies.py         # AL query strategies (STRATEGIES list)
 │       ├── segments.py           # four actuarial segments + segment_rmse(), segment_rel_rmse()
