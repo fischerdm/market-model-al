@@ -17,7 +17,7 @@ Usage
     #   n_weeks, weekly_budget, anchor_space_multiplier, selection_fraction, seed,
     #   strategies, metrics, compute_shap_similarity, restart_strategies,
     #   market_supplement_ratio, market_profile_method, market_n_anchors,
-    #   gaussian_sigma_frac
+    #   gaussian_sigma_frac, warmup_scale
 
     # simulations: list of dicts with keys:
     #   name, label, has_tariff_changes,
@@ -68,6 +68,7 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
     cfg["market_n_anchors"] = int(rm.get("market_n_anchors", 50))
 
     cfg["gaussian_sigma_frac"]      = float(advanced.get("gaussian_sigma_frac", 0.3))
+    cfg["warmup_scale"]             = float(advanced.get("warmup_scale", 1.2))
 
     metrics = set(raw.get("metrics", list(_VALID_METRICS)))
     unknown = metrics - _VALID_METRICS

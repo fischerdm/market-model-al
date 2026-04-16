@@ -143,3 +143,11 @@ advanced:
   # each continuous feature's range.  0.3 → σ ≈ 30 % of range per feature,
   # keeping profiles near the anchor while varying all features jointly.
   gaussian_sigma_frac: 0.3
+
+  # Warm-start oversampling factor (04_build_warm_start.py only).
+  # Real rows: sample ceil(N_REAL × warmup_scale), validate, trim to N_REAL.
+  # Supplement anchors: multiply by ceil(warmup_scale) before pool generation,
+  # then trim the sampled pool to N_SUPPLEMENT.
+  # This guarantees exact counts after constraint validation dropout.
+  # 1.2 → oversample by 20 % and 2× anchors (ceil(1.2) = 2).
+  warmup_scale: 1.2

@@ -23,6 +23,7 @@ Run this script once before running 05_al_simulation.py.
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -47,15 +48,21 @@ MARKET_SUPPLEMENT_RATIO = sim_cfg["market_supplement_ratio"]
 MARKET_N_ANCHORS        = sim_cfg["market_n_anchors"]
 MARKET_PROFILE_METHOD   = sim_cfg["market_profile_method"]
 GAUSSIAN_SIGMA          = sim_cfg["gaussian_sigma_frac"]
+WARMUP_SCALE            = sim_cfg["warmup_scale"]
 
 N_SUPPLEMENT = max(0, int(WEEKLY_BUDGET * MARKET_SUPPLEMENT_RATIO))
 N_REAL       = WEEKLY_BUDGET - N_SUPPLEMENT
 
+# Oversampling counts: draw more than needed to absorb validation dropout,
+# then trim to exact targets.
+N_REAL_DRAW      = math.ceil(N_REAL * WARMUP_SCALE)
+N_ANCHOR_SCALE   = math.ceil(WARMUP_SCALE)   # e.g. ceil(1.2) = 2
+
 print("Warm start config (from simulation.yaml):")
 print(f"  weekly_budget={WEEKLY_BUDGET}  market_supplement_ratio={MARKET_SUPPLEMENT_RATIO}"
-      f"  method={MARKET_PROFILE_METHOD}")
-print(f"  → {N_REAL:,} real rows + {N_SUPPLEMENT:,} supplement rows"
-      f"  (market_n_anchors={MARKET_N_ANCHORS})\n")
+      f"  method={MARKET_PROFILE_METHOD}  warmup_scale={WARMUP_SCALE}")
+print(f"  → target: {N_REAL:,} real rows + {N_SUPPLEMENT:,} supplement rows"
+      f"  (market_n_anchors={MARKET_N_ANCHORS} × {N_ANCHOR_SCALE} = {MARKET_N_ANCHORS * N_ANCHOR_SCALE})\n")
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -78,12 +85,12 @@ rng = np.random.default_rng(SEED)
 
 # ── Component A: real rows ─────────────────────────────────────────────────────
 
-print(f"(A) Sampling {N_REAL:,} real portfolio rows…")
-real_sample = df[FEATURES].sample(n=N_REAL, random_state=SEED)
+print(f"(A) Sampling {N_REAL_DRAW:,} real portfolio rows (target {N_REAL:,} + oversampling)…")
+real_sample = df[FEATURES].sample(n=N_REAL_DRAW, random_state=SEED)
 
 valid_mask = engine.validate(real_sample)
 n_invalid  = (~valid_mask).sum()
-real_sample = real_sample[valid_mask].reset_index(drop=True)
+real_sample = real_sample[valid_mask].iloc[:N_REAL].reset_index(drop=True)
 print(f"    {n_invalid} rows dropped (data-quality violations) → {len(real_sample):,} kept")
 
 real_y = engine.query(real_sample)
@@ -92,9 +99,10 @@ print(f"    Oracle labels: mean={real_y.mean():.2f}  range=[{real_y.min():.2f}, 
 # ── Component B: supplement profiles ─────────────────────────────────────────
 
 if N_SUPPLEMENT > 0:
-    print(f"(B) Building {MARKET_PROFILE_METHOD} supplement from {MARKET_N_ANCHORS} anchors,"
-          f" sampling {N_SUPPLEMENT:,} rows…")
-    anchors    = df[FEATURES].sample(n=MARKET_N_ANCHORS, random_state=SEED + 1)
+    n_anchors_draw = MARKET_N_ANCHORS * N_ANCHOR_SCALE
+    print(f"(B) Building {MARKET_PROFILE_METHOD} supplement from {n_anchors_draw} anchors"
+          f" (target {N_SUPPLEMENT:,} rows)…")
+    anchors    = df[FEATURES].sample(n=n_anchors_draw, random_state=SEED + 1)
     supplement = create_market_supplement(
         anchors,
         n=N_SUPPLEMENT,
@@ -142,6 +150,7 @@ metadata = {
     "market_supplement_ratio" : MARKET_SUPPLEMENT_RATIO,
     "market_profile_method"   : MARKET_PROFILE_METHOD,
     "market_n_anchors"        : MARKET_N_ANCHORS,
+    "warmup_scale"            : WARMUP_SCALE,
     "seed"                    : SEED,
     "n_total"                 : int(len(warm_start_X)),
     "n_real"                  : int(len(real_sample)),

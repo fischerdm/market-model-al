@@ -414,13 +414,14 @@ class ALSimulation:
                 if len(profiles) == 0:
                     continue
 
-                # Sample down to weekly_budget when the pool exceeds it.
-                # This ensures every strategy adds exactly ~weekly_budget rows
-                # per week, including Gaussian strategies whose validation
-                # dropout is offset by the profile_pool_multiplier.
+                # Trim to weekly_budget by taking the leading rows.
+                # Profiles are ordered by anchor rank (best anchor first), so
+                # trimming from the front preserves the strategy's selection
+                # priority — the highest-scoring anchors contribute first.
+                # For random strategies anchors have no meaningful order, so
+                # trimming is equivalent to a random draw.
                 if len(profiles) > weekly_budget:
-                    sample_idx = rng.choice(len(profiles), size=weekly_budget, replace=False)
-                    profiles = profiles.iloc[sample_idx].reset_index(drop=True)
+                    profiles = profiles.iloc[:weekly_budget].reset_index(drop=True)
 
             # ── Label with current oracle ─────────────────────────────────────
             labels = current_oracle.query(profiles)
