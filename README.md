@@ -23,7 +23,7 @@ The end deliverable is a **Streamlit dashboard** for interactively exploring and
 - **Ceteris-paribus (CP):** for each anchor row, each continuous feature is swept one at a time across its full range while all other features are held fixed. Produces 254 profiles per anchor. Mirrors standard aggregator scraping practice.
 - **Gaussian perturbations:** for each anchor row, all continuous features are perturbed simultaneously with independent Gaussian noise (σ = `gaussian_sigma_frac × feature_range`). Values are clipped and constraint-validated. Produces 254 profiles per anchor (same budget). Tests whether joint feature variation allows LightGBM to learn interaction effects more efficiently than axis-aligned CP sweeps.
 
-**Warm start** seeds the competitor model with ~5,000 real rows (≈ one week's scraping budget), simulating organic quote requests arriving via the aggregator before the systematic AL loop begins.
+**Warm start** seeds the competitor model with `warmup_weeks × weekly_budget` rows (default: 1 × 5,000 = 5,000), simulating organic quote requests arriving before the systematic AL loop begins. Composition mirrors `random_market`: real portfolio rows topped up with a synthetic supplement via `create_market_supplement()`. A `warmup_scale` factor (default 1.2) oversamples before validation to guarantee exact counts after constraint dropout.
 
 The **weekly AL loop** selects anchors using a query strategy, generates profiles, labels them via the oracle, and retrains the competitor model:
 
@@ -33,10 +33,10 @@ The **weekly AL loop** selects anchors using a query strategy, generates profile
 n_anchors_base  = weekly_budget // profiles_per_anchor   # e.g. 5 000 ÷ 254 = 19
 n_pool          = n_anchors_base × anchor_space_multiplier   # e.g. 19 × 30 = 570  (all scored)
 n_selected      = round(n_pool × selection_fraction)          # e.g. 570 × 10% = 57  (profiled)
-profiles        → sampled down to weekly_budget after generation
+profiles        → trimmed to weekly_budget from the top-ranked anchors first
 ```
 
-`anchor_space_multiplier` (default 30) controls how wide the candidate field is. `selection_fraction` (default 10%) controls what share is profiled — increase it if Gaussian validation dropout leaves the weekly budget under-utilised.
+`anchor_space_multiplier` (default 30) controls how wide the candidate field is. `selection_fraction` (default 10%) controls what share is profiled — increase it if Gaussian validation dropout leaves the weekly budget under-utilised. Trimming by rank means the highest-scoring anchors always contribute their profiles before lower-ranked ones are cut.
 
 **AL strategies** — each has a CP variant (`_cp`) and a Gaussian variant (`_gauss`):
 
@@ -79,7 +79,8 @@ market-model-al/
 │   ├── simulation.yaml         # n_weeks, budget, strategies, metrics, simulations list
 │   │                           # advanced: anchor_space_multiplier, selection_fraction,
 │   │                           #           gaussian_sigma_frac, market_supplement_ratio,
-│   │                           #           market_profile_method, random_market.market_n_anchors
+│   │                           #           market_profile_method, random_market.market_n_anchors,
+│   │                           #           warmup_weeks, warmup_scale
 │   └── tariff_changes.yaml     # named perturbation library (type + params, no timing)
 ├── data/
 │   ├── raw/                # Lledó & Pavía (2024) data (not committed)
@@ -90,7 +91,7 @@ market-model-al/
 │   ├── 01_oracle.py                    # fit and validate the oracle
 │   ├── 02_oracle_engine_smoke.py       # smoke test: OraclePricingEngine
 │   ├── 03_profile_generator_smoke.py   # smoke test: ceteris-paribus generator
-│   ├── 04_build_warm_start.py          # build warm start dataset (~5k real rows)
+│   ├── 04_build_warm_start.py          # build warm start (warmup_weeks × weekly_budget rows)
 │   ├── 05_al_simulation.py             # run all simulations, save results + figures
 │   └── 06_segment_summary.py           # segment distribution analysis + threshold calibration
 ├── src/
