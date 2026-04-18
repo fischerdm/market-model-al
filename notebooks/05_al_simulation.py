@@ -106,6 +106,8 @@ PALETTE = {
     "error_based_gauss":            "#ffbb78",
     "segment_adaptive_gauss":       "#c5b0d5",
     "disruption_gauss":             "#98df8a",
+    # Hybrid
+    "informed_market":              "#2ca02c",
 }
 
 # ── Load warm start ────────────────────────────────────────────────────────────
