@@ -17,7 +17,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 ROOT         = Path(__file__).parent
-RESULTS_PATH = ROOT / "outputs" / "al_results" / "results.parquet"
+RESULTS_DIR  = ROOT / "outputs" / "al_results"
 
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -115,7 +115,12 @@ _LEGACY_STRATEGY_NAMES = {
 
 @st.cache_data
 def load_results() -> pd.DataFrame:
-    df = pd.read_parquet(RESULTS_PATH)
+    # Load all per-strategy parquets (new format) plus the legacy monolithic
+    # file if it still exists, then concatenate.
+    parquets = [p for p in RESULTS_DIR.glob("*.parquet") if p.stem != "results_legacy"]
+    if not parquets:
+        return pd.DataFrame()
+    df = pd.concat([pd.read_parquet(p) for p in parquets], ignore_index=True)
     df["strategy"] = df["strategy"].replace(_LEGACY_STRATEGY_NAMES)
     df["strategy_label"] = df["strategy"].map(STRATEGY_LABELS).fillna(df["strategy"])
     return df
@@ -320,9 +325,9 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    if not RESULTS_PATH.exists():
+    if not any(RESULTS_DIR.glob("*.parquet")):
         st.error(
-            f"Results file not found:\n`{RESULTS_PATH}`\n\n"
+            f"No results found in `{RESULTS_DIR}`\n\n"
             "Run `notebooks/05_al_simulation.py` first."
         )
         st.stop()
