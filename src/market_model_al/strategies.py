@@ -294,4 +294,7 @@ STRATEGIES = [
     # Gaussian-perturbation variants: same selection logic, joint profile generator.
     "random_gauss", "uncertainty_gauss", "error_based_gauss",
     "segment_adaptive_gauss", "disruption_gauss",
+    # Hybrid: error-based scoring on a representative market pool (real rows + supplement).
+    # Combines random_market representativeness with error_based informativeness.
+    "informed_market",
 ]
