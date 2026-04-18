@@ -164,33 +164,49 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
     return df_run
 
 
-# ── Load existing results (incremental mode) ──────────────────────────────────
-# Previously completed (simulation, strategy) pairs are skipped so new
-# strategies can be added without re-running the full experiment.
-# Seeds are derived deterministically per (simulation, strategy), so results
-# are identical whether a strategy is run alone or alongside others.
+# ── Migrate legacy monolithic parquet (one-time) ──────────────────────────────
+# results.parquet (old format) → one {strategy}.parquet per strategy key.
+# Runs once; a rename to results_legacy.parquet prevents re-migration.
 
-results_path = RESULTS_DIR / "results.parquet"
-if results_path.exists():
-    existing_df = pd.read_parquet(results_path)
-    done_pairs  = set(zip(existing_df["simulation"], existing_df["strategy"]))
-    print(f"Loaded existing results: {len(existing_df):,} rows, "
-          f"{len(done_pairs)} (simulation, strategy) pairs already done.\n")
-else:
-    existing_df = None
-    done_pairs  = set()
+def _migrate_legacy_parquet() -> None:
+    legacy = RESULTS_DIR / "results.parquet"
+    if not legacy.exists():
+        return
+    print("Migrating legacy results.parquet to per-strategy files…")
+    df = pd.read_parquet(legacy)
+    for strategy, grp in df.groupby("strategy"):
+        out = RESULTS_DIR / f"{strategy}.parquet"
+        if out.exists():
+            print(f"  {strategy}.parquet already exists — skipping")
+            continue
+        grp.reset_index(drop=True).to_parquet(out, index=False)
+        print(f"  {strategy} → {out.name}  ({len(grp):,} rows)")
+    legacy.rename(RESULTS_DIR / "results_legacy.parquet")
+    print("  Renamed results.parquet → results_legacy.parquet\n")
+
+_migrate_legacy_parquet()
+
+
+# ── Detect already-completed strategies ───────────────────────────────────────
+# A strategy is done when its parquet file exists (contains all simulations).
+# Delete the file to force a re-run of that strategy.
+
+done_strategies = {p.stem for p in RESULTS_DIR.glob("*.parquet")
+                   if p.stem != "results_legacy"}
+if done_strategies:
+    print(f"Already completed: {sorted(done_strategies)}\n")
 
 
 # ── Run all simulations ────────────────────────────────────────────────────────
+# Collect frames per strategy across all simulations, then save one file each.
 
-all_frames = []
+strategy_frames: dict[str, list[pd.DataFrame]] = {}
 
 for simulation in simulations:
     sim_name  = simulation["name"]
     sim_label = simulation["label"]
     has_tc    = simulation["has_tariff_changes"]
 
-    # Build (week, perturbed_oracle) pairs for this simulation's timeline
     tc_pairs = [
         (week, build_perturbed_oracle(oracle, perturb_cfg))
         for week, perturb_cfg in simulation["tariff_changes"]
@@ -200,37 +216,37 @@ for simulation in simulations:
     print(f"SIMULATION: {sim_label}")
     print("=" * 60)
 
-    # Continuous runs — all strategies
     for strategy in STRATEGIES_RUN:
-        if (sim_name, strategy) in done_pairs:
-            print(f"\n--- {strategy} [skipped — already in parquet] ---")
+        if strategy in done_strategies:
+            print(f"\n--- {strategy} [skipped — {strategy}.parquet exists] ---")
             continue
         print(f"\n--- {strategy} ---")
-        all_frames.append(_run(strategy, sim_name, tc_pairs))
+        strategy_frames.setdefault(strategy, []).append(
+            _run(strategy, sim_name, tc_pairs)
+        )
 
-    # Restart runs — only for simulations that have tariff changes
     if has_tc:
         for strategy in RESTART_STRATS:
             label = f"{strategy}_restart"
-            if (sim_name, label) in done_pairs:
-                print(f"\n--- {label} [skipped — already in parquet] ---")
+            if label in done_strategies:
+                print(f"\n--- {label} [skipped — {label}.parquet exists] ---")
                 continue
             print(f"\n--- {label} ---")
-            all_frames.append(_run(strategy, sim_name, tc_pairs,
-                                   restart=True, strategy_label=label))
+            strategy_frames.setdefault(label, []).append(
+                _run(strategy, sim_name, tc_pairs, restart=True, strategy_label=label)
+            )
 
-# ── Save all results ───────────────────────────────────────────────────────────
+# ── Save one parquet per strategy ─────────────────────────────────────────────
 
-if all_frames:
-    new_df = pd.concat(all_frames, ignore_index=True)
-    frames_to_save = [f for f in [existing_df, new_df] if f is not None]
-    results = pd.concat(frames_to_save, ignore_index=True)
-    results.to_parquet(results_path, index=False)
-    print(f"\nResults saved ({len(new_df):,} new rows + "
-          f"{len(existing_df) if existing_df is not None else 0:,} existing) -> {results_path}")
-else:
-    results = existing_df
-    print("\nNo new runs — existing parquet unchanged.")
+for strategy_key, frames in strategy_frames.items():
+    out_path = RESULTS_DIR / f"{strategy_key}.parquet"
+    pd.concat(frames, ignore_index=True).to_parquet(out_path, index=False)
+    print(f"Saved → {out_path.name}")
+
+# ── Merge all per-strategy parquets for plotting ──────────────────────────────
+
+all_parquets = [p for p in RESULTS_DIR.glob("*.parquet") if p.stem != "results_legacy"]
+results = pd.concat([pd.read_parquet(p) for p in all_parquets], ignore_index=True)
 
 # ── Plotting ───────────────────────────────────────────────────────────────────
 
