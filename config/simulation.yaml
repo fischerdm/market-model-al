@@ -26,6 +26,8 @@ strategies:
   - error_based_gauss
   - segment_adaptive_gauss
   - disruption_gauss
+  # Hybrid: error-based scoring on a representative market pool.
+  - informed_market
 
 # ── Metrics ─────────────────────────────────────────────────────────────────
 # Controls which convergence metrics are computed each week.

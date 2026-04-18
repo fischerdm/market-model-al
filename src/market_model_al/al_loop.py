@@ -48,6 +48,7 @@ Usage
 
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Any
 
@@ -109,6 +110,7 @@ class ALSimulation:
         compute_shap_similarity: bool = True,
     ) -> None:
         self._oracle = oracle_engine
+        self._base_seed = seed
         self._master_rng = np.random.default_rng(seed)
         self._competitor_params = competitor_params
         self._compute_shap_similarity = compute_shap_similarity
@@ -167,6 +169,7 @@ class ALSimulation:
         market_supplement_ratio: float = _MARKET_SUPPLEMENT_RATIO,
         market_profile_method: str = _MARKET_PROFILE_METHOD,
         gaussian_sigma_frac: float = 0.3,
+        simulation_name: str = "",
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -236,14 +239,16 @@ class ALSimulation:
 
         # Both CP (_cp) and Gaussian (_gauss) strategies share the same selection logic;
         # only the profile generator differs.  Strip the suffix to get the dispatch key.
-        is_gauss      = strategy.endswith("_gauss")
-        is_cp         = strategy.endswith("_cp")
+        is_gauss         = strategy.endswith("_gauss")
+        is_cp            = strategy.endswith("_cp")
+        is_market        = strategy in ("random_market", "informed_market")
+        is_informed      = strategy == "informed_market"
         if is_gauss:
             base_strategy = strategy[:-6]   # strip "_gauss" (6 chars) → e.g. "random"
         elif is_cp:
             base_strategy = strategy[:-3]   # strip "_cp"    (3 chars) → e.g. "random"
         else:
-            base_strategy = strategy        # "random_market" — no suffix
+            base_strategy = strategy        # "random_market", "informed_market" — no suffix
 
         # Sort change events by week and build a fast lookup set
         tc_schedule: list[tuple[int, Any]] = sorted(tariff_changes or [], key=lambda x: x[0])
@@ -254,7 +259,12 @@ class ALSimulation:
         n_pool         = n_anchors_base * anchor_space_multiplier
         n_selected     = max(1, round(n_pool * selection_fraction))
 
-        rng = np.random.default_rng(int(self._master_rng.integers(0, 2**31)))
+        # Derive a deterministic seed from (base_seed, simulation_name, strategy)
+        # so each (simulation, strategy) pair always gets the same RNG regardless
+        # of the order strategies are run or whether runs are split across executions.
+        _key = f"{self._base_seed}:{simulation_name}:{strategy}"
+        _hash = int(hashlib.sha256(_key.encode()).hexdigest()[:8], 16) & 0x7FFFFFFF
+        rng = np.random.default_rng(_hash)
 
         # Working labeled set — starts from warm start
         labeled_X = warm_start_X.copy().reset_index(drop=True)
@@ -279,6 +289,11 @@ class ALSimulation:
                   f"  method={market_profile_method}  weeks={n_weeks}")
             print(f"  per week: {n_supplement} from {market_profile_method} pool"
                   f" + {n_real} from real pool")
+        elif strategy == "informed_market":
+            pool_size = min(len(self._anchor_pool_idx), weekly_budget * anchor_space_multiplier)
+            print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
+                  f"  pool_size={pool_size:,}  supplement_ratio={market_supplement_ratio}"
+                  f"  method={market_profile_method}  weeks={n_weeks}")
         elif is_gauss:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
                   f"  n_anchors_base={n_anchors_base}  pool={n_pool}  selected={n_selected}"
@@ -386,6 +401,39 @@ class ALSimulation:
                 real_sample = self._real_X.iloc[real_idx].reset_index(drop=True)
 
                 profiles = pd.concat([supplement, real_sample], ignore_index=True)
+                if len(profiles) == 0:
+                    continue
+
+            elif strategy == "informed_market":
+                # ── informed_market: error-based scoring on a representative pool ──
+                # Draw a large candidate pool with the same market composition as
+                # random_market (real rows + synthetic supplement), then score every
+                # candidate with the error-based proxy model and select the top
+                # weekly_budget rows.  This adds informativeness on top of
+                # representativeness without sacrificing natural feature correlations.
+                pool_size     = min(len(self._anchor_pool_idx),
+                                    weekly_budget * anchor_space_multiplier)
+                n_supp_pool   = max(1, int(pool_size * market_supplement_ratio))
+                n_real_pool   = pool_size - n_supp_pool
+
+                pool_idx      = rng.choice(self._anchor_pool_idx, size=pool_size, replace=False)
+                real_pool     = self._real_X.iloc[pool_idx[:n_real_pool]].reset_index(drop=True)
+
+                supp_anchor_idx = rng.choice(self._anchor_pool_idx,
+                                             size=market_n_anchors, replace=False)
+                supplement_pool = create_market_supplement(
+                    self._real_X.iloc[supp_anchor_idx].reset_index(drop=True),
+                    n=n_supp_pool,
+                    method=market_profile_method,
+                    rng=rng,
+                    gaussian_sigma_frac=gaussian_sigma_frac,
+                )
+                candidate_pool = pd.concat([supplement_pool, real_pool], ignore_index=True)
+
+                chosen = error_based_query(
+                    competitor, labeled_X, labeled_y, candidate_pool, weekly_budget, rng
+                )
+                profiles = candidate_pool.iloc[chosen].reset_index(drop=True)
                 if len(profiles) == 0:
                     continue
 

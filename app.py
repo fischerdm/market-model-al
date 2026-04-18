@@ -17,7 +17,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 ROOT         = Path(__file__).parent
-RESULTS_PATH = ROOT / "outputs" / "al_results" / "results.parquet"
+RESULTS_DIR  = ROOT / "outputs" / "al_results"
 
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -43,6 +43,8 @@ STRATEGY_LABELS = {
     "error_based_gauss":            "Error-based (Gaussian)",
     "segment_adaptive_gauss":       "Segment-adaptive (Gaussian)",
     "disruption_gauss":             "Disruption-adaptive (Gaussian)",
+    # Hybrid: error-based scoring on a representative market pool
+    "informed_market":              "Informed market",
 }
 
 PALETTE = {
@@ -63,6 +65,8 @@ PALETTE = {
     "error_based_gauss":            "#ffbb78",
     "segment_adaptive_gauss":       "#c5b0d5",
     "disruption_gauss":             "#f7b6b6",
+    # Hybrid: bold teal-green, distinct from both random_market and error_based
+    "informed_market":              "#2ca02c",
 }
 
 METRIC_OPTIONS = {
@@ -111,7 +115,12 @@ _LEGACY_STRATEGY_NAMES = {
 
 @st.cache_data
 def load_results() -> pd.DataFrame:
-    df = pd.read_parquet(RESULTS_PATH)
+    # Load all per-strategy parquets (new format) plus the legacy monolithic
+    # file if it still exists, then concatenate.
+    parquets = [p for p in RESULTS_DIR.glob("*.parquet") if p.stem != "results_legacy"]
+    if not parquets:
+        return pd.DataFrame()
+    df = pd.concat([pd.read_parquet(p) for p in parquets], ignore_index=True)
     df["strategy"] = df["strategy"].replace(_LEGACY_STRATEGY_NAMES)
     df["strategy_label"] = df["strategy"].map(STRATEGY_LABELS).fillna(df["strategy"])
     return df
@@ -316,9 +325,9 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    if not RESULTS_PATH.exists():
+    if not any(RESULTS_DIR.glob("*.parquet")):
         st.error(
-            f"Results file not found:\n`{RESULTS_PATH}`\n\n"
+            f"No results found in `{RESULTS_DIR}`\n\n"
             "Run `notebooks/05_al_simulation.py` first."
         )
         st.stop()
@@ -337,9 +346,12 @@ with st.sidebar:
 
     selected_strategies = []
 
-    # random_market stands alone — not CP, not Gaussian
+    # Market strategies stand alone — not CP, not Gaussian
     if st.checkbox(STRATEGY_LABELS["random_market"], value=True, key="chk_random_market"):
         selected_strategies.append("random_market")
+    if "informed_market" in available:
+        if st.checkbox(STRATEGY_LABELS["informed_market"], value=True, key="chk_informed_market"):
+            selected_strategies.append("informed_market")
 
     with st.expander("CP strategies", expanded=False):
         for s in cp_strategies:
@@ -667,6 +679,38 @@ with tab3:
                 "Like random, it ignores where the competitor model is currently wrong.",
             ],
             "when": "Use as the primary benchmark when the competitor's portfolio is known to be selective — i.e. when pure random from the portfolio would under-represent segments the competitor prices but doesn't write.",
+        },
+        {
+            "name": "Informed market",
+            "key": "informed_market",
+            "summary": "Error-based informativeness scoring applied to a representative market pool — the best-of-both-worlds hybrid.",
+            "detail": (
+                "This strategy combines the two ideas that perform best individually: "
+                "the representativeness of `random_market` and the informativeness of `error_based`. "
+                "Each week it builds a large candidate pool using the same market composition as "
+                "`random_market` (real portfolio rows + synthetic supplement), scores every candidate "
+                "with a proxy model trained on relative residuals, and selects the top `weekly_budget` "
+                "rows — those where the competitor model is currently most wrong. "
+                "Because the pool is representative by construction, the scoring step cannot starve "
+                "mainstream segments the way a globally greedy strategy would."
+            ),
+            "strengths": [
+                "Representative pool ensures no segment is structurally excluded before scoring.",
+                "Informativeness filter focuses the budget on where the model is currently wrong.",
+                "Preserves natural feature correlations of real portfolio rows.",
+                "Uses the same market composition as the warm start — no extra assumptions.",
+            ],
+            "weaknesses": [
+                "Scoring the full candidate pool adds computational cost vs. pure random_market.",
+                "Proxy model quality is limited by labeled set size — early weeks fall back toward random.",
+                "Pool size is capped by available real rows (~100k), limiting the scoring pool at large budgets.",
+            ],
+            "when": (
+                "The principled next step after observing that random_market outperforms "
+                "all informativeness strategies.  If this hybrid still cannot beat random_market, "
+                "the conclusion is definitive: representativeness dominates informativeness "
+                "in competitor tariff recovery."
+            ),
         },
         {
             "name": "Uncertainty (CP)",
