@@ -48,6 +48,7 @@ Usage
 
 from __future__ import annotations
 
+import hashlib
 import time
 from typing import Any
 
@@ -109,6 +110,7 @@ class ALSimulation:
         compute_shap_similarity: bool = True,
     ) -> None:
         self._oracle = oracle_engine
+        self._base_seed = seed
         self._master_rng = np.random.default_rng(seed)
         self._competitor_params = competitor_params
         self._compute_shap_similarity = compute_shap_similarity
@@ -167,6 +169,7 @@ class ALSimulation:
         market_supplement_ratio: float = _MARKET_SUPPLEMENT_RATIO,
         market_profile_method: str = _MARKET_PROFILE_METHOD,
         gaussian_sigma_frac: float = 0.3,
+        simulation_name: str = "",
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
 
@@ -254,7 +257,12 @@ class ALSimulation:
         n_pool         = n_anchors_base * anchor_space_multiplier
         n_selected     = max(1, round(n_pool * selection_fraction))
 
-        rng = np.random.default_rng(int(self._master_rng.integers(0, 2**31)))
+        # Derive a deterministic seed from (base_seed, simulation_name, strategy)
+        # so each (simulation, strategy) pair always gets the same RNG regardless
+        # of the order strategies are run or whether runs are split across executions.
+        _key = f"{self._base_seed}:{simulation_name}:{strategy}"
+        _hash = int(hashlib.sha256(_key.encode()).hexdigest()[:8], 16) & 0x7FFFFFFF
+        rng = np.random.default_rng(_hash)
 
         # Working labeled set — starts from warm start
         labeled_X = warm_start_X.copy().reset_index(drop=True)
