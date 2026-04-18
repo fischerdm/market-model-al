@@ -154,11 +154,29 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
         market_supplement_ratio=MARKET_SUPPLEMENT_RATIO,
         market_profile_method=MARKET_PROFILE_METHOD,
         gaussian_sigma_frac=GAUSSIAN_SIGMA,
+        simulation_name=sim_name,
     )
     df_run["simulation"] = sim_name
     if strategy_label is not None:
         df_run["strategy"] = strategy_label
     return df_run
+
+
+# ── Load existing results (incremental mode) ──────────────────────────────────
+# Previously completed (simulation, strategy) pairs are skipped so new
+# strategies can be added without re-running the full experiment.
+# Seeds are derived deterministically per (simulation, strategy), so results
+# are identical whether a strategy is run alone or alongside others.
+
+results_path = RESULTS_DIR / "results.parquet"
+if results_path.exists():
+    existing_df = pd.read_parquet(results_path)
+    done_pairs  = set(zip(existing_df["simulation"], existing_df["strategy"]))
+    print(f"Loaded existing results: {len(existing_df):,} rows, "
+          f"{len(done_pairs)} (simulation, strategy) pairs already done.\n")
+else:
+    existing_df = None
+    done_pairs  = set()
 
 
 # ── Run all simulations ────────────────────────────────────────────────────────
@@ -182,6 +200,9 @@ for simulation in simulations:
 
     # Continuous runs — all strategies
     for strategy in STRATEGIES_RUN:
+        if (sim_name, strategy) in done_pairs:
+            print(f"\n--- {strategy} [skipped — already in parquet] ---")
+            continue
         print(f"\n--- {strategy} ---")
         all_frames.append(_run(strategy, sim_name, tc_pairs))
 
@@ -189,16 +210,25 @@ for simulation in simulations:
     if has_tc:
         for strategy in RESTART_STRATS:
             label = f"{strategy}_restart"
+            if (sim_name, label) in done_pairs:
+                print(f"\n--- {label} [skipped — already in parquet] ---")
+                continue
             print(f"\n--- {label} ---")
             all_frames.append(_run(strategy, sim_name, tc_pairs,
                                    restart=True, strategy_label=label))
 
 # ── Save all results ───────────────────────────────────────────────────────────
 
-results = pd.concat(all_frames, ignore_index=True)
-results_path = RESULTS_DIR / "results.parquet"
-results.to_parquet(results_path, index=False)
-print(f"\nAll results saved -> {results_path}")
+if all_frames:
+    new_df = pd.concat(all_frames, ignore_index=True)
+    frames_to_save = [f for f in [existing_df, new_df] if f is not None]
+    results = pd.concat(frames_to_save, ignore_index=True)
+    results.to_parquet(results_path, index=False)
+    print(f"\nResults saved ({len(new_df):,} new rows + "
+          f"{len(existing_df) if existing_df is not None else 0:,} existing) -> {results_path}")
+else:
+    results = existing_df
+    print("\nNo new runs — existing parquet unchanged.")
 
 # ── Plotting ───────────────────────────────────────────────────────────────────
 
