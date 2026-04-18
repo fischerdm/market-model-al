@@ -62,12 +62,15 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    *Gaussian strategies* (`_gauss` suffix): identical selection logic, `generate_gaussian_profiles` instead of `generate_ceteris_paribus`:
    - `random_gauss`, `uncertainty_gauss`, `error_based_gauss`, `segment_adaptive_gauss`, `disruption_gauss`
 
-   *Market strategy* (no suffix):
+   *Market strategies* (no suffix):
    - `random_market` — `(1 − market_supplement_ratio)` real portfolio rows + `market_supplement_ratio` synthetic supplement (CP or Gaussian); models portfolio coverage gap
+   - `informed_market` — same representative pool as `random_market`, then scored by `error_based_query`; selects top `weekly_budget` rows. Best-of-both-worlds hybrid: representativeness + informativeness.
 
    All strategies fall back to random when labeled set is empty. `shap_divergence` was removed (required oracle SHAP — not deployable).
 
-   **Strategy naming in `al_loop.py`**: suffix is stripped before dispatch (`_cp` → 3 chars, `_gauss` → 6 chars); `random_market` has no suffix and falls through as-is. Restart label = `{strategy}_restart` (e.g. `random_cp_restart`).
+   **Strategy naming in `al_loop.py`**: suffix is stripped before dispatch (`_cp` → 3 chars, `_gauss` → 6 chars); `random_market` and `informed_market` have no suffix. Restart label = `{strategy}_restart` (e.g. `random_cp_restart`).
+
+   **Seed design**: per-run RNG is derived deterministically as `sha256(base_seed:simulation_name:strategy)`. Each (simulation, strategy) pair always gets the same seed regardless of call order or whether strategies are run in separate executions. Holdout is carved once in `ALSimulation.__init__` from `_master_rng` (unaffected). `run()` accepts `simulation_name: str = ""` for seed derivation.
 
    **Tariff change simulation** (`PerturbedOracleEngine` in `perturbed_oracle.py`):
    - A perturbed oracle applies a systematic premium shift (e.g. young-driver surcharge +20%, uniform reprice, area repricing, compose for stacked shocks)
@@ -85,12 +88,14 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    2. Do Gaussian joint perturbations outperform CP sweeps by exposing LightGBM to multivariate variation within each anchor's batch?
 
    **Simulation findings (10-week run, 5 000 profiles/week)**:
-   - `random_market` clearly outperforms **all** strategies — CP, Gaussian, and informativeness-based — both globally and in every segment
+   - `random_market` clearly outperforms **all** strategies — CP, Gaussian, informativeness-based, and the hybrid — both globally and in every segment
+   - `informed_market` (error-based scoring on representative pool) is worse than `random_market` — the informativeness filter adds noise and cost without improving on pure exploration
    - Among CP strategies, `random_cp` is competitive with all informativeness strategies globally
-   - `error_based_cp` recovers the young-driver segment faster — commercially important
-   - Root cause: greedy strategies starve mainstream segments; random is representative by construction; real portfolio rows carry natural feature correlations that CP and Gaussian synthetic profiles cannot replicate
+   - `error_based_cp` recovers the young-driver segment faster — commercially important; only segment where informativeness pays
+   - Root cause / framing: **exploration-exploitation tradeoff** — exploitation (informativeness) starves mainstream segments; exploration (representativeness) wins by construction
    - Full restart after targeted tariff change is not always optimal; `disruption_cp` is the principled alternative
    - Gaussian strategies perform comparably to their CP counterparts; joint variation does not compensate for the absence of natural feature correlations
+   - **Definitive conclusion**: representativeness dominates informativeness at every level — (1) random_cp vs informativeness CP, (2) random_market vs all, (3) informed_market (best hybrid) still loses to random_market
 
 ### No copula / generative model
 The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly.
@@ -106,9 +111,12 @@ Python 3.12, LightGBM, SHAP, Streamlit, PyYAML. All notebooks are `.py` files (n
 ## Dashboard notes
 
 ### Sidebar
-Strategies are grouped in three collapsible expanders: **CP strategies**, **Gaussian strategies**, **Restart variants**. `random_market` is a standalone top-level checkbox. CP strategies are rendered with triangle markers; Gaussian strategies with circle markers; restart variants with dashed lines.
+Strategies are grouped in three collapsible expanders: **CP strategies**, **Gaussian strategies**, **Restart variants**. `random_market` and `informed_market` are standalone top-level checkboxes (only shown if their parquet exists). CP strategies are rendered with triangle markers; Gaussian strategies with circle markers; restart variants with dashed lines.
 
 A `_LEGACY_STRATEGY_NAMES` dict in `load_results()` transparently remaps old strategy names (pre-`_cp` rename) so existing parquets work without re-running the simulation.
+
+### Results storage
+`load_results()` globs `outputs/al_results/*.parquet` (excluding `results_legacy.parquet`) and concatenates. One file per strategy key (e.g. `random_cp.parquet`, `informed_market.parquet`), each containing all simulations for that strategy. Adding a new strategy creates a new file without touching existing ones. `notebooks/05_al_simulation.py` runs `_migrate_legacy_parquet()` on startup to convert old monolithic `results.parquet` to per-strategy files.
 
 ### Theming
 The dashboard uses a dark theme defined in `.streamlit/config.toml` (GitHub-dark palette). A light-mode toggle was prototyped using CSS injection but abandoned — tab labels and `st.dataframe` metric text required extensive per-element CSS. If light mode is revisited, use a separate `config.toml` profile or a custom Streamlit component.

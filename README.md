@@ -44,6 +44,7 @@ profiles        → trimmed to weekly_budget from the top-ranked anchors first
 |---|---|---|
 | `random_cp` / `random_gauss` | Uniform random anchor selection — no model required | Yes |
 | `random_market` | 90% real portfolio rows + 10% synthetic supplement (CP or Gaussian) from random anchors; split controlled by `market_supplement_ratio` | Yes |
+| `informed_market` | Error-based scoring on a large representative pool (same market composition as `random_market`); selects top `weekly_budget` rows — best-of-both-worlds hybrid | Yes |
 | `uncertainty_cp` / `_gauss` | Anchors where bootstrap prediction variance is highest | Yes |
 | `error_based_cp` / `_gauss` | Anchors with highest expected relative residual (proxy model on labeled data) | Yes |
 | `segment_adaptive_cp` / `_gauss` | Anchors scored by global + per-segment relative RMSE; converges toward random as gaps close | Yes |
@@ -61,13 +62,16 @@ Convergence is tracked in two metrics:
 
 ## Simulation findings (10-week run, 5 000 profiles/week)
 
+The central tension is the **exploration-exploitation tradeoff**: informativeness strategies exploit high-error regions at the cost of mainstream coverage; representative strategies explore the full market space.
+
 | Finding | Detail |
 |---|---|
 | **Random market outperforms all strategies** | Real portfolio rows carry natural joint feature correlations — LightGBM learns interaction effects far more efficiently from these than from any synthetic profiles (CP or Gaussian). Holds globally and in every segment. |
+| **Informed market (hybrid) does not beat random market** | Applying error-based scoring within a representative pool — the best-of-both-worlds approach — still does not outperform pure random market. Representativeness is the dominant factor; the informativeness filter adds noise and cost without improving convergence. |
 | **Gaussian profiles do not close the gap** | Joint Gaussian perturbations perform comparably to their CP counterparts. Varying all features simultaneously does not compensate for the absence of natural feature correlations present in real observed quotes. |
 | **Random beats sophisticated CP strategies globally** | Among CP strategies, random anchor sampling matches or outperforms all informativeness-based strategies on global RMSE and SHAP cosine similarity at 10 weeks. |
 | **Error-based recovers young drivers faster** | Segment-level RMSE reveals that `error_based_cp` converges faster on young drivers (age < 30) — the one segment where informativeness pays. |
-| **Root cause: informativeness vs. representativeness** | Greedy informativeness strategies pull budget toward high-signal edge cases, starving mainstream segments that random covers proportionally. |
+| **Root cause: exploration vs. exploitation** | Greedy informativeness (exploitation) pulls budget toward high-signal edge cases, starving mainstream segments. Representative sampling (exploration) covers the market proportionally by construction — and that is sufficient. |
 | **Restart is not always optimal** | After a targeted tariff change, a full restart discards valid labels from unchanged segments. Continuous scraping can win on global RMSE at week 10. |
 | **Disruption-adaptive** | Uses the week-on-week *change* in segment RMSE as a signal, not the absolute level. Fires on disruption, reverts to random once the gap closes, discards no labels. |
 
@@ -113,7 +117,7 @@ market-model-al/
 │   ├── figures/            # saved plots (not committed)
 │   ├── models/             # oracle.pkl (not committed)
 │   ├── warm_start/         # warm_start_X.parquet, warm_start_y.npy (not committed)
-│   └── al_results/         # results.parquet (not committed)
+│   └── al_results/         # {strategy}.parquet — one file per strategy (committed)
 ├── app.py                  # Streamlit dashboard (3 tabs)
 └── pyproject.toml
 ```
