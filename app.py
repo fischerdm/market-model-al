@@ -340,9 +340,9 @@ with st.sidebar:
     available = df_all["strategy"].unique()
 
     cp_strategies          = [s for s in STRATEGY_LABELS
-                               if s.endswith("_cp") and "disruption" not in s]
+                               if s.endswith("_cp") and "disruption" not in s and s != "random_cp"]
     gauss_strategies       = [s for s in STRATEGY_LABELS
-                               if s.endswith("_gauss") and "disruption" not in s]
+                               if s.endswith("_gauss") and "disruption" not in s and s != "random_gauss"]
     disruption_strategies  = [s for s in ["disruption_cp", "disruption_gauss"]
                                if s in available]
     restart_strategies     = [s for s in STRATEGY_LABELS
@@ -352,8 +352,9 @@ with st.sidebar:
     selected_strategies = []
 
     st.caption("Benchmark")
-    if st.checkbox(STRATEGY_LABELS["random_market"], value=True, key="chk_random_market"):
-        selected_strategies.append("random_market")
+    for s in ["random_market", "random_cp", "random_gauss"]:
+        if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
+            selected_strategies.append(s)
 
     st.caption("Market-based AL")
     if "informed_market" in available:
