@@ -645,90 +645,135 @@ with tab3:
 
     st.divider()
 
-    strategies_info = [
-        {
-            "name": "Random (CP)",
-            "key": "random_cp",
-            "summary": "Selects anchors uniformly at random from the candidate pool each week.",
-            "strengths": [
-                "Representative by construction — every region of feature space is sampled in proportion to its true frequency.",
-                "No model required to score candidates, so it is the fastest strategy.",
-                "Robust: cannot be fooled by a mis-specified scoring model.",
-            ],
-            "weaknesses": [
-                "Ignores all information about where the competitor model is currently wrong.",
-                "Budget is spread evenly even when some segments are well-understood and others are not.",
-            ],
-            "when": "Strong general-purpose baseline. Hard to beat on global RMSE and SHAP similarity because it never sacrifices representativeness.",
-        },
+    def _strategy_card(info: dict) -> None:
+        with st.expander(f"**{info['name']}**  —  {info['summary']}", expanded=False):
+            if "detail" in info:
+                st.markdown(info["detail"])
+                st.divider()
+            col_s, col_w = st.columns(2)
+            with col_s:
+                st.markdown("**Strengths**")
+                for s in info["strengths"]:
+                    st.markdown(f"- {s}")
+            with col_w:
+                st.markdown("**Weaknesses**")
+                for w in info["weaknesses"]:
+                    st.markdown(f"- {w}")
+            st.markdown(f"**When to use:** {info['when']}")
+
+    # ── Benchmark ─────────────────────────────────────────────────────────────
+    st.subheader("Benchmark")
+    st.caption("Random strategies — no model required, no informativeness scoring.")
+
+    for info in [
         {
             "name": "Random market",
             "key": "random_market",
-            "summary": "Samples each week from a combined pool of real portfolio rows and ceteris-paribus profiles, weighted by the assumed market coverage ratio.",
+            "summary": "Samples each week from a combined pool of real portfolio rows and a synthetic market supplement.",
             "detail": (
                 "The competitor's portfolio does not fully represent aggregator traffic — "
                 "there are segments where the competitor quotes but rarely writes business. "
-                "This strategy models that gap explicitly: each week it generates a CP pool "
-                "from a small number of random anchors, then draws a fixed fraction of the "
-                "weekly budget from that pool (default 10 %) and the remainder from the real "
-                "portfolio rows. The split is controlled by `market_supplement_ratio` in `simulation.yaml` "
-                "and is applied consistently to the warm start as well, so the two phases share "
-                "the same market composition assumption."
+                "This strategy models that gap explicitly: each week it draws a fixed fraction "
+                "of the weekly budget from a synthetic CP supplement (default 10 %) and the "
+                "remainder from the real portfolio rows. The split is controlled by "
+                "`market_supplement_ratio` in `simulation.yaml` and is applied consistently "
+                "to the warm start as well, so both phases share the same market composition assumption."
             ),
             "strengths": [
                 "Represents the true market space — not just the competitor's written portfolio.",
-                "Consistent with the warm start: both use the same `market_supplement_ratio` and `market_profile_method`.",
-                "No informativeness scoring required — fast and simple like random.",
-                "The CP ratio and anchor count are independently configurable.",
+                "No informativeness scoring required — fast and simple.",
+                "Consistent with the warm start: both use the same `market_supplement_ratio`.",
             ],
             "weaknesses": [
-                "CP pool generation adds overhead compared to pure random sampling.",
-                "The `market_supplement_ratio` and `market_profile_method` are modelling assumptions that must be set externally.",
-                "Like random, it ignores where the competitor model is currently wrong.",
+                "The `market_supplement_ratio` is a modelling assumption that must be set externally.",
+                "Ignores where the competitor model is currently wrong.",
             ],
-            "when": "Use as the primary benchmark when the competitor's portfolio is known to be selective — i.e. when pure random from the portfolio would under-represent segments the competitor prices but doesn't write.",
+            "when": "Primary benchmark. Use whenever the competitor's portfolio is known to be selective.",
         },
         {
-            "name": "Informed market",
-            "key": "informed_market",
-            "summary": "Error-based informativeness scoring applied to a representative market pool — the best-of-both-worlds hybrid.",
-            "detail": (
-                "This strategy combines the two ideas that perform best individually: "
-                "the representativeness of `random_market` and the informativeness of `error_based`. "
-                "Each week it builds a large candidate pool using the same market composition as "
-                "`random_market` (real portfolio rows + synthetic supplement), scores every candidate "
-                "with a proxy model trained on relative residuals, and selects the top `weekly_budget` "
-                "rows — those where the competitor model is currently most wrong. "
-                "Because the pool is representative by construction, the scoring step cannot starve "
-                "mainstream segments the way a globally greedy strategy would."
-            ),
+            "name": "Random (CP)",
+            "key": "random_cp",
+            "summary": "Selects anchors uniformly at random; generates ceteris-paribus profiles from them.",
             "strengths": [
-                "Representative pool ensures no segment is structurally excluded before scoring.",
-                "Informativeness filter focuses the budget on where the model is currently wrong.",
-                "Preserves natural feature correlations of real portfolio rows.",
-                "Uses the same market composition as the warm start — no extra assumptions.",
+                "Representative by construction within the anchor pool.",
+                "No model required — fastest strategy.",
+                "Robust: cannot be misled by a mis-specified scoring model.",
             ],
             "weaknesses": [
-                "Scoring the full candidate pool adds computational cost vs. pure random_market.",
-                "Proxy model quality is limited by labeled set size — early weeks fall back toward random.",
-                "Pool size is capped by available real rows (~100k), limiting the scoring pool at large budgets.",
+                "Anchored to the company portfolio — inherits its selection bias.",
+                "Ignores where the competitor model is currently wrong.",
             ],
-            "when": (
-                "The principled next step after observing that random_market outperforms "
-                "all informativeness strategies.  If this hybrid still cannot beat random_market, "
-                "the conclusion is definitive: representativeness dominates informativeness "
-                "in competitor tariff recovery."
-            ),
+            "when": "Within-group baseline for CP strategies. Shows the floor that informativeness strategies must beat.",
         },
+        {
+            "name": "Random (Gaussian)",
+            "key": "random_gauss",
+            "summary": "Same as Random (CP) but generates joint Gaussian perturbations instead of ceteris-paribus sweeps.",
+            "strengths": [
+                "Exposes LightGBM to genuine joint-feature variation with no informativeness cost.",
+                "No model required — as fast as Random (CP).",
+            ],
+            "weaknesses": [
+                "Inherits the same portfolio selection bias as Random (CP).",
+                "Joint variation does not compensate for the absence of natural feature correlations.",
+            ],
+            "when": "Within-group baseline for Gaussian strategies. Isolates the effect of the profile generator from anchor selection.",
+        },
+    ]:
+        _strategy_card(info)
+
+    st.divider()
+
+    # ── Market-based AL ────────────────────────────────────────────────────────
+    st.subheader("Market-based AL")
+    st.caption("Draws from the market-representative pool and applies an informativeness filter.")
+
+    _strategy_card({
+        "name": "Informed market",
+        "key": "informed_market",
+        "summary": "Error-based informativeness scoring applied to a representative market pool — the best-of-both-worlds hybrid.",
+        "detail": (
+            "Each week it builds a large candidate pool using the same market composition as "
+            "`random_market` (real portfolio rows + synthetic supplement), scores every candidate "
+            "with a proxy model trained on relative residuals, and selects the top `weekly_budget` "
+            "rows — those where the competitor model is currently most wrong. "
+            "Because the pool is representative by construction, the scoring step cannot starve "
+            "mainstream segments the way a globally greedy strategy would."
+        ),
+        "strengths": [
+            "Representative pool ensures no segment is structurally excluded before scoring.",
+            "Informativeness filter focuses the budget on where the model is currently wrong.",
+            "Preserves natural feature correlations of real portfolio rows.",
+        ],
+        "weaknesses": [
+            "Scoring the full candidate pool adds computational cost vs. pure random_market.",
+            "Proxy model quality is limited by labeled set size — early weeks fall back toward random.",
+        ],
+        "when": (
+            "The principled best-of-both-worlds challenger to random_market. "
+            "If this hybrid still cannot beat random_market, the conclusion is definitive: "
+            "representativeness dominates informativeness in competitor tariff recovery."
+        ),
+    })
+
+    st.divider()
+
+    # ── Anchor-based AL — CP ───────────────────────────────────────────────────
+    st.subheader("Anchor-based AL — CP")
+    st.caption(
+        "Select anchors from the company portfolio using an informativeness criterion, "
+        "then generate ceteris-paribus profiles (one feature swept at a time)."
+    )
+
+    for info in [
         {
             "name": "Uncertainty (CP)",
             "key": "uncertainty_cp",
-            "summary": "Trains several bootstrap-resampled models and selects anchors where their predictions disagree most (high variance).",
+            "summary": "Trains several bootstrap-resampled models and selects anchors where their predictions disagree most.",
             "detail": (
-                "Bootstrap resampling means fitting the same model type multiple times, each time on a random sample "
-                "drawn with replacement from the labeled set. Because each bootstrap sample omits some rows and "
-                "duplicates others, the resulting models differ slightly. Where they disagree strongly on a prediction, "
-                "the labeled set provides weak or conflicting signal in that region — a proxy for model uncertainty."
+                "Bootstrap resampling fits the same model type multiple times, each time on a random sample "
+                "drawn with replacement from the labeled set. Where the models disagree strongly, "
+                "the labeled set provides weak or conflicting signal — a proxy for model uncertainty."
             ),
             "strengths": [
                 "Targets regions where the model genuinely lacks confidence.",
@@ -747,12 +792,12 @@ with tab3:
             "summary": "Trains a proxy model on labeled relative residuals and selects anchors predicted to have the highest relative error.",
             "strengths": [
                 "Directly targets where the competitor model is currently most wrong.",
-                "Uses relative residuals (error / premium) so high-premium policies are not systematically over-sampled.",
+                "Uses relative residuals so high-premium policies are not systematically over-sampled.",
                 "Recovers specific high-error segments faster than random (e.g. young drivers).",
             ],
             "weaknesses": [
                 "Greedy: concentrates budget on the hardest segment, leaving others under-sampled.",
-                "Global RMSE and SHAP similarity suffer from the resulting distribution mismatch.",
+                "Global RMSE and SHAP similarity suffer from the distribution mismatch.",
             ],
             "when": "Best when you care primarily about one known high-error segment rather than global convergence.",
         },
@@ -762,96 +807,104 @@ with tab3:
             "summary": "Scores each anchor by the global relative RMSE plus the relative RMSE of every named segment it belongs to.",
             "strengths": [
                 "Dynamic: allocation shifts automatically as segment gaps open and close.",
-                "Uses relative RMSE so high-premium segments are not permanently over-sampled.",
                 "No starvation: anchors outside named segments always receive the global baseline score.",
                 "Converges toward random as segment gaps close.",
             ],
             "weaknesses": [
                 "Reacts to persistent difficulty, not sudden disruption.",
-                "Segment definitions are fixed; segments not in the list are invisible to the strategy.",
+                "Segment definitions are fixed; unlisted segments are invisible to the strategy.",
             ],
-            "when": "Good all-round strategy when you expect persistent difficulty in specific named segments.",
+            "when": "Good all-round informativeness strategy when you expect persistent difficulty in specific named segments.",
         },
+    ]:
+        _strategy_card(info)
+
+    st.divider()
+
+    # ── Anchor-based AL — Gaussian ─────────────────────────────────────────────
+    st.subheader("Anchor-based AL — Gaussian")
+    st.caption(
+        "Same anchor-selection logic as the CP variants above, "
+        "but profiles are joint Gaussian perturbations instead of ceteris-paribus sweeps."
+    )
+
+    with st.expander("**How Gaussian profiles differ from ceteris-paribus profiles**", expanded=False):
+        st.markdown(
+            """
+CP profiles vary **one feature at a time** across its full range while holding all others fixed.
+This gives dense 1-D coverage of each marginal effect but provides no joint-feature variation
+within a single anchor's batch.
+
+Gaussian profiles vary **all continuous features simultaneously**. For each anchor, N profiles
+are drawn by adding independent Gaussian noise to every continuous feature:
+
+> σ_feature = sigma_frac × (feature_max − feature_min)
+
+Values are clipped to the valid range and constraint-validated (e.g. `licence_age ≤ driver_age − 18`).
+With the default `sigma_frac = 0.3`, profiles stay near the anchor's natural feature context while
+exposing the model to genuine joint-feature variation.
+
+**Budget parity:** profiles per anchor equals the CP constant (254), so both types consume
+identical weekly budgets and results are directly comparable.
+            """
+        )
+
+    for name, key in [
+        ("Uncertainty (Gaussian)",         "uncertainty_gauss"),
+        ("Error-based (Gaussian)",         "error_based_gauss"),
+        ("Segment-adaptive (Gaussian)",    "segment_adaptive_gauss"),
+    ]:
+        cp_key = key.replace("_gauss", "_cp")
+        with st.expander(f"**{name}**", expanded=False):
+            st.markdown(
+                f"Identical anchor-selection logic to **{STRATEGY_LABELS[cp_key]}** above. "
+                f"The only difference is the profile generator: joint Gaussian perturbations "
+                f"instead of ceteris-paribus sweeps."
+            )
+
+    st.divider()
+
+    # ── Tariff-change response ─────────────────────────────────────────────────
+    st.subheader("Tariff-change response")
+    st.caption(
+        "Reactive strategies designed for competitor repricing events. "
+        "Not classic AL — they fire on a monitoring signal rather than an informativeness criterion."
+    )
+
+    for info in [
         {
             "name": "Disruption-adaptive (CP)",
             "key": "disruption_cp",
-            "summary": "Monitors the week-on-week *change* in per-segment RMSE. Concentrates budget on disrupted segments (≥15% relative RMSE increase); reverts to global random otherwise.",
+            "summary": "Monitors the week-on-week change in per-segment RMSE; concentrates budget on disrupted segments (≥15% spike).",
             "strengths": [
-                "Uses the derivative of RMSE, not its level — fires on disruption, not on permanent difficulty.",
-                "Robust to segments that are always hard: ignores them unless they suddenly worsen.",
-                "Does not discard any labeled data — old labels from unchanged segments remain valid.",
+                "Uses the derivative of RMSE — fires on disruption, not on persistent difficulty.",
+                "Does not discard labeled data from unchanged segments.",
                 "Automatically resets after recovery.",
             ],
             "weaknesses": [
                 "Blind to gradual drift — only reacts to sharp week-on-week spikes.",
                 "The 15% threshold is a fixed hyperparameter.",
-                "Falls back to random on the first week (no prior RMSE to compare against).",
+                "Falls back to random in the first week (no prior RMSE to compare against).",
             ],
-            "when": "Best response to sudden, localised tariff changes. Outperforms restart strategies because it does not discard valid labels from unchanged segments.",
+            "when": "Best response to sudden, localised tariff changes. Outperforms restart strategies by retaining valid labels from unchanged segments.",
         },
-    ]
+        {
+            "name": "Disruption-adaptive (Gaussian)",
+            "key": "disruption_gauss",
+            "summary": "Same disruption-detection logic as above; Gaussian profiles generated from the targeted anchors.",
+            "strengths": [
+                "Same monitoring benefits as Disruption-adaptive (CP).",
+                "Joint profiles may help recover interaction effects disrupted by the tariff change.",
+            ],
+            "weaknesses": [
+                "Same threshold sensitivity as Disruption-adaptive (CP).",
+            ],
+            "when": "Use in place of Disruption-adaptive (CP) when you want to test whether joint variation speeds interaction recovery after a tariff shock.",
+        },
+    ]:
+        _strategy_card(info)
 
-    for info in strategies_info:
-        with st.expander(f"**{info['name']}**  —  {info['summary']}", expanded=False):
-            if "detail" in info:
-                st.markdown(info["detail"])
-                st.divider()
-            col_s, col_w = st.columns(2)
-            with col_s:
-                st.markdown("**Strengths**")
-                for s in info["strengths"]:
-                    st.markdown(f"- {s}")
-            with col_w:
-                st.markdown("**Weaknesses**")
-                for w in info["weaknesses"]:
-                    st.markdown(f"- {w}")
-            st.markdown(f"**When to use:** {info['when']}")
-
-    st.divider()
-    st.subheader("Gaussian-perturbation variants  `(*_gauss)`")
-    st.markdown(
-        "Each CP strategy above has a Gaussian counterpart that uses the same anchor-selection "
-        "logic but replaces the ceteris-paribus profile generator with **joint Gaussian perturbations**."
-    )
-    with st.expander("**How Gaussian profiles differ from ceteris-paribus profiles**", expanded=False):
-        st.markdown(
-            """
-Ceteris-paribus (CP) profiles vary **one feature at a time** across its full range while
-holding all other features fixed.  This gives dense 1-D coverage of each marginal effect but
-provides no joint-feature variation within a single anchor's batch — LightGBM must infer
-interactions from the way different anchors happen to combine.
-
-Gaussian profiles vary **all continuous features simultaneously**.  For each anchor, N profiles
-are drawn by adding independent Gaussian noise to every continuous feature:
-
-> σ_feature = sigma_frac × (feature_max − feature_min)
-
-Values are clipped to the valid feature range and then constraint-validated (e.g.
-`licence_age ≤ driver_age − 18`).  With the default `sigma_frac = 0.3`, the profiles stay
-within roughly one standard deviation of the anchor's own values, preserving the anchor's
-natural context (e.g. a young-driver anchor generates young-driver profiles) while exposing
-the model to real joint-feature variation.
-
-**Budget parity:** the number of profiles per anchor is set equal to the CP constant (254),
-so both profile types consume identical weekly budgets and results are directly comparable.
-
-**Key hypothesis:** if joint profiles allow LightGBM to learn interaction effects more
-efficiently than 1-D CP sweeps, Gaussian strategies should converge faster — especially
-when the AL strategy is already targeting the right anchors.
-            """
-        )
-    gauss_strategies_info = [
-        ("Random (Gaussian)",             "random_gauss",           "Same as Random (CP) but profiles are joint Gaussian perturbations instead of 1-D CP sweeps. The primary baseline for testing whether the profile generator matters independently of anchor selection."),
-        ("Uncertainty (Gaussian)",        "uncertainty_gauss",      "Bootstrap uncertainty scoring selects anchors; Gaussian profiles are generated from them. Tests whether joint variation amplifies the uncertainty strategy's coverage gains."),
-        ("Error-based (Gaussian)",        "error_based_gauss",      "Proxy-model error scoring selects anchors in high-error regions; Gaussian profiles keep the budget focused there while varying features jointly."),
-        ("Segment-adaptive (Gaussian)",   "segment_adaptive_gauss", "Segment RMSE allocation selects anchors; Gaussian profiles ensure the chosen segment receives varied joint coverage rather than axis-aligned sweeps."),
-        ("Disruption-adaptive (Gaussian)","disruption_gauss",       "Disruption detection selects anchors in newly-shocked segments; Gaussian profiles help the model recover interactions disrupted by the tariff change."),
-    ]
-    for name, key, desc in gauss_strategies_info:
-        cp_key = key.replace("_gauss", "_cp")   # e.g. random_gauss → random_cp
-        with st.expander(f"**{name}**  —  {desc}", expanded=False):
-            st.markdown(
-                f"Identical anchor-selection logic to **{STRATEGY_LABELS[cp_key]}** "
-                f"above. The only difference is the profile generator: joint Gaussian perturbations "
-                f"instead of ceteris-paribus sweeps. See the explainer above for details."
-            )
+    if restart_strategies:
+        st.markdown("**Restart variants** clear the labeled set after a tariff change and restart from the warm start. "
+                    "They serve as a comparison point for the disruption-adaptive strategies — showing the cost of "
+                    "discarding all accumulated labels.")
