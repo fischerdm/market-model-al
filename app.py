@@ -391,7 +391,7 @@ with st.sidebar:
         f"**Simulation:** {n_weeks} weeks  \n"
         f"**Max labeled:** {n_rows:,} profiles  \n"
         f"**~profiles/week:** {int(weekly_added):,}  \n"
-        f"**Simulations:** {len(all_sims)}"
+        f"**Scenarios:** {len(all_sims)}"
     )
 
     st.divider()
@@ -446,7 +446,7 @@ tab1, tab2, tab3 = st.tabs([
 with tab1:
     all_sims_t1 = df_all["simulation"].unique().tolist()
     selected_sim_t1 = st.selectbox(
-        "Simulation",
+        "Scenario",
         options=all_sims_t1,
         format_func=sim_display,
         key="sim_select_t1",
@@ -574,7 +574,7 @@ with tab2:
     else:
         sim_options_t2 = df_all["simulation"].unique().tolist()
         selected_sim_t2 = st.selectbox(
-            "Simulation",
+            "Scenario",
             options=sim_options_t2,
             format_func=sim_display,
             key="sim_select_t2",
