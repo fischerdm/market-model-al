@@ -320,7 +320,7 @@ st.set_page_config(
             "The oracle is a LightGBM model trained on a real Spanish motor vehicle portfolio "
             "([Mendeley Data, doi: 10.17632/5cxyb5fp4f.2](https://data.mendeley.com/datasets/5cxyb5fp4f/2)). "
             "Strategies are evaluated on holdout RMSE, per-segment RMSE, and SHAP cosine similarity.\n\n"
-            "The central finding on a Spanish dataset: representativeness dominates informativeness. "
+            "The central finding on this Spanish dataset: representativeness dominates informativeness. "
             "Random market sampling — no scoring, no model — outperforms every tested informativeness "
             "strategy globally and per segment. Even the principled best-of-both-worlds hybrid "
             "(a representative pool with an informativeness filter on top) cannot beat pure random "
