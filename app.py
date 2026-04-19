@@ -317,7 +317,7 @@ st.set_page_config(
             "An insurer scraping competitor quotes from an aggregator website can't afford to "
             "scrape everything — it has to choose *what* to request. This app explores that "
             "choice using active learning (AL).\n\n"
-            "**The central finding on a Spanish dataset: representativeness dominates informativeness.** "
+            "The central finding on a Spanish dataset: representativeness dominates informativeness. "
             "Random market sampling — no scoring, no model — outperforms every tested informativeness "
             "strategy globally and per segment. Even the principled best-of-both-worlds hybrid "
             "(a representative pool with an informativeness filter on top) cannot beat pure random "
