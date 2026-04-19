@@ -315,16 +315,16 @@ st.set_page_config(
     menu_items={
         "About": (
             "An insurer scraping competitor quotes from an aggregator website can't afford to "
-            "scrape everything — it has to choose *what* to request. This app explores that "
-            "choice using active learning (AL).\n\n"
+            "scrape everything — it has to choose what to request. This app explores that "
+            "choice using active learning (AL). "
+            "The oracle is a LightGBM model trained on a real Spanish motor vehicle portfolio "
+            "([Mendeley Data, doi: 10.17632/5cxyb5fp4f.2](https://data.mendeley.com/datasets/5cxyb5fp4f/2)). "
+            "Strategies are evaluated on holdout RMSE, per-segment RMSE, and SHAP cosine similarity.\n\n"
             "The central finding on a Spanish dataset: representativeness dominates informativeness. "
             "Random market sampling — no scoring, no model — outperforms every tested informativeness "
             "strategy globally and per segment. Even the principled best-of-both-worlds hybrid "
             "(a representative pool with an informativeness filter on top) cannot beat pure random "
             "market. Exploration wins.\n\n"
-            "The oracle is a LightGBM model trained on a real Spanish motor vehicle portfolio "
-            "([Mendeley Data, doi: 10.17632/5cxyb5fp4f.2](https://data.mendeley.com/datasets/5cxyb5fp4f/2)). "
-            "Strategies are evaluated on holdout RMSE, per-segment RMSE, and SHAP cosine similarity.\n\n"
             "Built with Streamlit, LightGBM, SHAP, and Plotly.  \n"
             "David Fischer · April 2026"
         ),
