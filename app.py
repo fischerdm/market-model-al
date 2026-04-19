@@ -289,6 +289,23 @@ def segment_heatmap(
     return fig
 
 
+def _strategy_card(info: dict) -> None:
+    with st.expander(f"**{info['name']}**  —  {info['summary']}", expanded=False):
+        if "detail" in info:
+            st.markdown(info["detail"])
+            st.divider()
+        col_s, col_w = st.columns(2)
+        with col_s:
+            st.markdown("**Strengths**")
+            for s in info["strengths"]:
+                st.markdown(f"- {s}")
+        with col_w:
+            st.markdown("**Weaknesses**")
+            for w in info["weaknesses"]:
+                st.markdown(f"- {w}")
+        st.markdown(f"**When to use:** {info['when']}")
+
+
 # ── Page setup ─────────────────────────────────────────────────────────────────
 
 st.set_page_config(
@@ -657,22 +674,6 @@ with tab3:
     )
 
     st.divider()
-
-    def _strategy_card(info: dict) -> None:
-        with st.expander(f"**{info['name']}**  —  {info['summary']}", expanded=False):
-            if "detail" in info:
-                st.markdown(info["detail"])
-                st.divider()
-            col_s, col_w = st.columns(2)
-            with col_s:
-                st.markdown("**Strengths**")
-                for s in info["strengths"]:
-                    st.markdown(f"- {s}")
-            with col_w:
-                st.markdown("**Weaknesses**")
-                for w in info["weaknesses"]:
-                    st.markdown(f"- {w}")
-            st.markdown(f"**When to use:** {info['when']}")
 
     # ── Benchmark ─────────────────────────────────────────────────────────────
     st.subheader("Benchmark")
