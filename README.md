@@ -24,6 +24,8 @@ The Lledó dataset represents a *company* portfolio — the policies actually he
 
 **The preparation step** (`create_market_supplement()`) constructs a **market portfolio** from the company portfolio by supplementing under-represented segments. This market portfolio is used as the anchor pool for `random_market` and `informed_market`, and for the warm start. The `market_supplement_ratio` parameter (default 10%) controls the supplement fraction. This correction is what gives the market strategies their structural advantage: they train on a distribution that more closely reflects the full aggregator traffic, not just the policies the company happened to write.
 
+> **Important distinction.** The oracle (Phase 1) is trained on the *company portfolio* only — and intentionally so. The oracle represents the competitor's own pricing engine, learned from their own data. The market portfolio correction applies only to Phase 2: it adjusts the distribution of profiles that *our* competitor model is trained on during the AL loop, simulating what we would observe arriving via the aggregator.
+
 ### Phase 2 — Active learning loop
 
 **Two profile generators** are compared:

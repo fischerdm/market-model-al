@@ -323,6 +323,16 @@
       outperform CP and Gaussian strategies.
     </div>
 
+    <div class="callout warn">
+      <strong>Important distinction: oracle vs. competitor model.</strong>
+      The oracle (Phase 1) is trained on the <em>company portfolio only</em> — intentionally.
+      It represents the <em>competitor's</em> pricing engine, learned from their own data.
+      The market portfolio correction applies only in Phase 2: it adjusts the distribution
+      of profiles that <em>our</em> competitor model is trained on during the AL loop,
+      simulating what we observe arriving via the aggregator. Applying the correction to the
+      oracle would distort the ground truth tariff.
+    </div>
+
     <div class="callout insight">
       <strong>Core research questions.</strong>
       (1) Does an active learning query strategy rediscover systematic ceteris paribus
