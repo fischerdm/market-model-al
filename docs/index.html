@@ -29,52 +29,6 @@
       margin-bottom: 32px;
     }
 
-    /* ── tech stack icons ── */
-    .stack-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0;
-      margin-bottom: 32px;
-      flex-wrap: wrap;
-    }
-    .stack-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-    }
-    .stack-item img {
-      width: 52px;
-      height: 52px;
-      display: block;
-    }
-    .stack-item .stack-label {
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.6);
-    }
-    .stack-connector {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 0 20px;
-    }
-    .stack-connector .conn-line {
-      width: 48px;
-      height: 1.5px;
-      background: rgba(255,255,255,0.25);
-      margin-top: 18px;
-    }
-    .stack-connector .conn-label {
-      font-size: 0.7rem;
-      color: rgba(255,255,255,0.3);
-      letter-spacing: 0.5px;
-      margin-top: -6px;
-    }
     header p.byline {
       font-size: 0.82rem;
       color: rgba(255,255,255,0.45);
@@ -234,37 +188,6 @@
 
 <header>
   <h1>Recursive Model Improvement via<br>Active Learning in Non-Life Pricing</h1>
-
-  <div class="stack-row">
-    <div class="stack-item">
-      <img src="https://cdn.simpleicons.org/python/ffffff" alt="Python">
-      <span class="stack-label">Python</span>
-    </div>
-    <div class="stack-connector">
-      <div class="conn-line"></div>
-      <div class="conn-label">trains</div>
-    </div>
-    <div class="stack-item">
-      <img src="https://cdn.simpleicons.org/lightgbm/ffffff" alt="LightGBM">
-      <span class="stack-label">LightGBM</span>
-    </div>
-    <div class="stack-connector">
-      <div class="conn-line"></div>
-      <div class="conn-label">validated by</div>
-    </div>
-    <div class="stack-item">
-      <img src="https://cdn.simpleicons.org/python/ffffff" alt="SHAP">
-      <span class="stack-label">SHAP</span>
-    </div>
-    <div class="stack-connector">
-      <div class="conn-line"></div>
-      <div class="conn-label">explored via</div>
-    </div>
-    <div class="stack-item">
-      <img src="https://cdn.simpleicons.org/streamlit/ffffff" alt="Streamlit">
-      <span class="stack-label">Streamlit</span>
-    </div>
-  </div>
 
   <p class="subtitle">A simulation of how an insurer reverse-engineers a competitor's
     pricing engine by scraping aggregator quotes — and how active learning makes that
