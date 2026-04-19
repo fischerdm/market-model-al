@@ -462,9 +462,18 @@ with tab1:
 
     st.header(sim_display(selected_sim_t1))
 
+    has_cp_t1    = any("_cp"   in s or s in ("random_market", "informed_market") for s in selected_strategies)
+    has_gauss_t1 = any("_gauss" in s for s in selected_strategies)
+    if has_cp_t1 and has_gauss_t1:
+        profile_desc = "Ceteris-paribus and Gaussian profiles are generated and oracle-labeled."
+    elif has_gauss_t1:
+        profile_desc = "Gaussian perturbation profiles are generated and oracle-labeled."
+    else:
+        profile_desc = "Ceteris-paribus profiles are generated and oracle-labeled."
+
     caption_parts = [
-        "Each week the strategy selects which anchor rows to scrape. "
-        "All ceteris-paribus profiles are generated and oracle-labeled. "
+        f"Each week the strategy selects which anchor rows to scrape. "
+        f"{profile_desc} "
         "Lower RMSE / higher SHAP similarity = faster recovery of the oracle tariff."
     ]
     if tc_weeks_t1:
