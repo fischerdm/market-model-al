@@ -356,11 +356,12 @@ with st.sidebar:
 
     with st.expander("Benchmark", expanded=True):
         for s in ["random_market", "random_cp", "random_gauss"]:
-            if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
-                selected_strategies.append(s)
+            if s in available:
+                if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
+                    selected_strategies.append(s)
 
-    with st.expander("Market-based AL", expanded=True):
-        if "informed_market" in available:
+    if "informed_market" in available:
+        with st.expander("Market-based AL", expanded=True):
             if st.checkbox(STRATEGY_LABELS["informed_market"], value=True, key="chk_informed_market"):
                 selected_strategies.append("informed_market")
 
