@@ -16,6 +16,16 @@ The end deliverable is a **Streamlit dashboard** for interactively exploring and
 - Dataset: Lledó, Josep; Pavía, Jose M. (2024), *Dataset of an actual motor vehicle insurance portfolio*, Mendeley Data V2, [doi: 10.17632/5cxyb5fp4f.2](https://doi.org/10.17632/5cxyb5fp4f.2)
 - Validate oracle structure with **SHAP dependence plots** (driver age U-curve, vehicle power, key interactions — actuarial sanity check)
 
+### Company portfolio vs. market portfolio
+
+The Lledó dataset represents a *company* portfolio — the policies actually held by one insurer. This is not the same as what the company would observe on an aggregator.
+
+**The aggregator loop:** a user submits a profile on a price comparison website; the request is forwarded to every participating insurer; each insurer returns a quote. The company therefore sees **all quote requests arriving via the aggregator** — the full market, not just its own policyholders. Because premiums are price-elastic, segments where the company is uncompetitive generate few conversions and are under-represented in its portfolio, even though the company still receives those quote requests.
+
+**The preparation step** (`create_market_supplement()`) constructs a **market portfolio** from the company portfolio by supplementing under-represented segments. This market portfolio is used as the anchor pool for `random_market` and `informed_market`, and for the warm start. The `market_supplement_ratio` parameter (default 10%) controls the supplement fraction. This correction is what gives the market strategies their structural advantage: they train on a distribution that more closely reflects the full aggregator traffic, not just the policies the company happened to write.
+
+> **Important distinction.** The oracle (Phase 1) is trained on the *company portfolio* only — and intentionally so. The oracle represents the competitor's own pricing engine, learned from their own data. The market portfolio correction applies only to Phase 2: it adjusts the distribution of profiles that *our* competitor model is trained on during the AL loop, simulating what we would observe arriving via the aggregator.
+
 ### Phase 2 — Active learning loop
 
 **Two profile generators** are compared:

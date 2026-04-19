@@ -298,6 +298,41 @@
       This is an active learning problem.
     </p>
 
+    <h3>Company portfolio vs. market portfolio</h3>
+    <p>
+      The dataset used in this project — <a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a> —
+      represents a <em>company</em> portfolio: the policies actually held by one insurer.
+      This is not the same as what the company observes on an aggregator.
+    </p>
+    <p>
+      On a price comparison platform, a user submits a profile and every participating insurer
+      returns a quote. The company therefore sees <strong>all quote requests arriving via the
+      aggregator</strong> — the full market — not just the profiles of its own policyholders.
+      Because premiums are price-elastic, segments where the company is uncompetitive generate
+      few conversions and are under-represented in its portfolio, even though the company still
+      receives those requests.
+    </p>
+    <div class="callout insight">
+      <strong>The market portfolio correction.</strong>
+      A preparation step constructs a <em>market portfolio</em> from the company portfolio by
+      supplementing under-represented segments via <code>create_market_supplement()</code>.
+      The <code>market_supplement_ratio</code> parameter (default 10%) controls the supplement
+      fraction. The warm start and the <code>random_market</code> / <code>informed_market</code>
+      strategies draw from this corrected pool — training on a distribution that more closely
+      reflects real aggregator traffic. This is the structural reason the market strategies
+      outperform CP and Gaussian strategies.
+    </div>
+
+    <div class="callout warn">
+      <strong>Important distinction: oracle vs. competitor model.</strong>
+      The oracle (Phase 1) is trained on the <em>company portfolio only</em> — intentionally.
+      It represents the <em>competitor's</em> pricing engine, learned from their own data.
+      The market portfolio correction applies only in Phase 2: it adjusts the distribution
+      of profiles that <em>our</em> competitor model is trained on during the AL loop,
+      simulating what we observe arriving via the aggregator. Applying the correction to the
+      oracle would distort the ground truth tariff.
+    </div>
+
     <div class="callout insight">
       <strong>Core research questions.</strong>
       (1) Does an active learning query strategy rediscover systematic ceteris paribus
