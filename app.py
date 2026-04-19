@@ -339,33 +339,40 @@ with st.sidebar:
 
     available = df_all["strategy"].unique()
 
-    cp_strategies      = [s for s in STRATEGY_LABELS if s.endswith("_cp")]
-    gauss_strategies   = [s for s in STRATEGY_LABELS if s.endswith("_gauss")]
-    restart_strategies = [s for s in STRATEGY_LABELS if s.endswith("_restart")
-                          and s in available]
+    cp_strategies          = [s for s in STRATEGY_LABELS
+                               if s.endswith("_cp") and "disruption" not in s]
+    gauss_strategies       = [s for s in STRATEGY_LABELS
+                               if s.endswith("_gauss") and "disruption" not in s]
+    disruption_strategies  = [s for s in ["disruption_cp", "disruption_gauss"]
+                               if s in available]
+    restart_strategies     = [s for s in STRATEGY_LABELS
+                               if s.endswith("_restart") and s in available]
+    tariff_response        = disruption_strategies + restart_strategies
 
     selected_strategies = []
 
-    # Market strategies stand alone — not CP, not Gaussian
+    st.caption("Benchmark")
     if st.checkbox(STRATEGY_LABELS["random_market"], value=True, key="chk_random_market"):
         selected_strategies.append("random_market")
+
+    st.caption("Market-based AL")
     if "informed_market" in available:
         if st.checkbox(STRATEGY_LABELS["informed_market"], value=True, key="chk_informed_market"):
             selected_strategies.append("informed_market")
 
-    with st.expander("CP strategies", expanded=False):
+    with st.expander("Anchor-based AL — CP", expanded=False):
         for s in cp_strategies:
             if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
                 selected_strategies.append(s)
 
-    with st.expander("Gaussian strategies", expanded=False):
+    with st.expander("Anchor-based AL — Gaussian", expanded=False):
         for s in gauss_strategies:
             if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
                 selected_strategies.append(s)
 
-    if restart_strategies:
-        with st.expander("Restart variants", expanded=False):
-            for s in restart_strategies:
+    if tariff_response:
+        with st.expander("Tariff-change response", expanded=False):
+            for s in tariff_response:
                 if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
                     selected_strategies.append(s)
 
