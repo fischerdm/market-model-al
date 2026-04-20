@@ -43,8 +43,9 @@ STRATEGY_LABELS = {
     "error_based_gauss":            "Error-based (Gaussian)",
     "segment_adaptive_gauss":       "Segment-adaptive (Gaussian)",
     "disruption_gauss":             "Disruption-adaptive (Gaussian)",
-    # Hybrid: error-based scoring on a representative market pool
+    # Market-pool strategies
     "informed_market":              "Informed market",
+    "cube_market":                  "Cube method (market)",
 }
 
 PALETTE = {
@@ -67,6 +68,8 @@ PALETTE = {
     "disruption_gauss":             "#f7b6b6",
     # Hybrid: bold teal-green, distinct from both random_market and error_based
     "informed_market":              "#2ca02c",
+    # Cube method: purple-magenta — distinct from all market and CP/Gauss traces
+    "cube_market":                  "#9c27b0",
 }
 
 METRIC_OPTIONS = {
@@ -377,10 +380,12 @@ with st.sidebar:
                 if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
                     selected_strategies.append(s)
 
-    if "informed_market" in available:
+    market_al = [s for s in ("informed_market", "cube_market") if s in available]
+    if market_al:
         with st.expander("Market-based AL", expanded=True):
-            if st.checkbox(STRATEGY_LABELS["informed_market"], value=True, key="chk_informed_market"):
-                selected_strategies.append("informed_market")
+            for s in market_al:
+                if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
+                    selected_strategies.append(s)
 
     with st.expander("Anchor-based AL — CP", expanded=False):
         for s in cp_strategies:
