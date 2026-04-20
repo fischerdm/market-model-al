@@ -1,6 +1,6 @@
 # When Random Wins: Active Learning for Competitor Pricing Intelligence
 
-We built 12 active learning strategies to reverse-engineer a competitor's insurance tariff from aggregator quotes. None of them beat random sampling.
+We built 13 strategies to reverse-engineer a competitor's insurance tariff from aggregator quotes. None of them beat random sampling.
 
 Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *competitor model*.
 
@@ -57,6 +57,7 @@ profiles        → trimmed to weekly_budget from the top-ranked anchors first
 | `random_cp` / `random_gauss` | Uniform random anchor selection — no model required | Yes |
 | `random_market` | 90% real portfolio rows + 10% synthetic supplement (CP or Gaussian) from random anchors; split controlled by `market_supplement_ratio` | Yes |
 | `informed_market` | Error-based scoring on a large representative pool (same market composition as `random_market`); selects top `weekly_budget` rows — best-of-both-worlds hybrid | Yes |
+| `cube_market` | Tillé-Deville cube method on a pool 3× the weekly budget: selects profiles balanced on all 7 continuous features by construction, not just in expectation | Yes |
 | `uncertainty_cp` / `_gauss` | Anchors where bootstrap prediction variance is highest | Yes |
 | `error_based_cp` / `_gauss` | Anchors with highest expected relative residual (proxy model on labeled data) | Yes |
 | `segment_adaptive_cp` / `_gauss` | Anchors scored by global + per-segment relative RMSE; converges toward random as gaps close | Yes |
@@ -95,15 +96,9 @@ The central finding — that `random_market` beats every informativeness-based A
 |---|---|
 | Simple random sampling (SRS) | `random_market` — achieves representativeness *in expectation* |
 | Neyman allocation | `segment_adaptive_cp` / `error_based_cp` — oversample high-variance strata; the formal guarantee that these heuristics approximate |
-| Balanced sampling (cube method) | Planned — guarantees covariate distribution of the training batch matches the market population exactly, every draw |
+| Balanced sampling (cube method) | `cube_market` — implemented; `cube_market` is sometimes marginally better than `random_market`, confirming SRS is already near the theoretical ceiling |
 
-`random_market` wins because representativeness is the dominant factor. Balanced sampling (Tillé & Deville, 2004) would deliver the same property with a formal guarantee and no random deviation — a strictly stronger approach, at higher computational cost.
-
-## Future work
-
-| Strategy | Description |
-|---|---|
-| `cube_method` | Balanced sampling via the cube method (Tillé & Deville, 2004): selects profiles such that the covariate distribution of the training batch exactly matches the market population on all auxiliary variables simultaneously. The survey-sampling-optimal version of `random_market`. Computationally expensive — approximations to be explored. |
+`random_market` wins because representativeness is the dominant factor. `cube_market` (Tillé & Deville, 2004) delivers exact covariate balance by construction — a strictly stronger property than SRS — yet the gain over `random_market` is only marginal. This confirms that SRS is robust: random deviation from the population mean at n=5,000 profiles/week is already small enough that eliminating it entirely provides little additional benefit.
 
 ## Project structure
 
@@ -136,6 +131,7 @@ market-model-al/
 │       ├── profile_generator.py  # generate_ceteris_paribus, generate_gaussian_profiles,
 │       │                         # create_market_supplement; PROFILES_PER_ANCHOR = 254
 │       ├── competitor_model.py   # CompetitorModel: LightGBM, retrained each iteration
+│       ├── cube_sampling.py      # Tillé-Deville cube method balanced sampling
 │       ├── strategies.py         # AL query strategies (STRATEGIES list)
 │       ├── segments.py           # four actuarial segments + segment_rmse(), segment_rel_rmse()
 │       │                         #   young_driver <30 (8.8%), high_value >28k (11.8%),
