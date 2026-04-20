@@ -328,6 +328,11 @@ st.set_page_config(
             "strategy globally and per segment. Even the principled best-of-both-worlds hybrid "
             "(a representative pool with an informativeness filter on top) cannot beat pure random "
             "market. Exploration wins.\n\n"
+            "To confirm that random market is near the theoretical ceiling, we implemented the cube "
+            "method (Tillé & Deville, 2004) — a balanced sampling strategy that guarantees exact "
+            "covariate balance by construction, not just in expectation. The result: cube method is "
+            "sometimes marginally better than random market, but not consistently across "
+            "segments or over time. SRS is essentially optimal.\n\n"
             "Built with Streamlit, LightGBM, SHAP, and Plotly.  \n"
             "David Fischer · April 2026"
         ),
