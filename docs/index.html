@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Recursive Model Improvement via Active Learning in Non-Life Pricing</title>
+  <title>When Random Wins: Active Learning for Competitor Pricing Intelligence</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -29,52 +29,6 @@
       margin-bottom: 32px;
     }
 
-    /* ── tech stack icons ── */
-    .stack-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0;
-      margin-bottom: 32px;
-      flex-wrap: wrap;
-    }
-    .stack-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-    }
-    .stack-item img {
-      width: 52px;
-      height: 52px;
-      display: block;
-    }
-    .stack-item .stack-label {
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.6);
-    }
-    .stack-connector {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 0 20px;
-    }
-    .stack-connector .conn-line {
-      width: 48px;
-      height: 1.5px;
-      background: rgba(255,255,255,0.25);
-      margin-top: 18px;
-    }
-    .stack-connector .conn-label {
-      font-size: 0.7rem;
-      color: rgba(255,255,255,0.3);
-      letter-spacing: 0.5px;
-      margin-top: -6px;
-    }
     header p.byline {
       font-size: 0.82rem;
       color: rgba(255,255,255,0.45);
@@ -149,9 +103,9 @@
       background: #fff;
       border: 1.5px solid #ccd8ed;
       border-radius: 8px;
-      padding: 10px 16px;
+      padding: 8px 12px;
       text-align: center;
-      min-width: 130px;
+      min-width: 110px;
     }
     .pipe-step .lang {
       font-size: 0.7rem;
@@ -233,48 +187,18 @@
 <body>
 
 <header>
-  <h1>Recursive Model Improvement via<br>Active Learning in Non-Life Pricing</h1>
+  <h1>When Random Wins: Active Learning<br>for Competitor Pricing Intelligence</h1>
 
-  <div class="stack-row">
-    <div class="stack-item">
-      <img src="https://cdn.simpleicons.org/python/ffffff" alt="Python">
-      <span class="stack-label">Python</span>
-    </div>
-    <div class="stack-connector">
-      <div class="conn-line"></div>
-      <div class="conn-label">trains</div>
-    </div>
-    <div class="stack-item">
-      <img src="https://cdn.simpleicons.org/lightgbm/ffffff" alt="LightGBM">
-      <span class="stack-label">LightGBM</span>
-    </div>
-    <div class="stack-connector">
-      <div class="conn-line"></div>
-      <div class="conn-label">validated by</div>
-    </div>
-    <div class="stack-item">
-      <img src="https://cdn.simpleicons.org/python/ffffff" alt="SHAP">
-      <span class="stack-label">SHAP</span>
-    </div>
-    <div class="stack-connector">
-      <div class="conn-line"></div>
-      <div class="conn-label">explored via</div>
-    </div>
-    <div class="stack-item">
-      <img src="https://cdn.simpleicons.org/streamlit/ffffff" alt="Streamlit">
-      <span class="stack-label">Streamlit</span>
-    </div>
-  </div>
-
-  <p class="subtitle">A simulation of how an insurer reverse-engineers a competitor's
-    pricing engine by scraping aggregator quotes — and how active learning makes that
-    scraping strategy as efficient as possible.</p>
+  <p class="subtitle">We built 12 active learning strategies to reverse-engineer a competitor's
+    insurance tariff from aggregator quotes. None of them beat random sampling.</p>
   <p class="byline">David Fischer · 2026</p>
   <div class="badge-row">
     <span class="badge">Python 3.12 · LightGBM · SHAP</span>
     <span class="badge">Active Learning · 12 strategies</span>
     <span class="badge">Streamlit Dashboard</span>
-    <span class="badge">Motor Insurance · 105 K policies</span>
+    <span class="badge">Spain · Motor Insurance · 105 K policies</span>
+    <span class="badge">10 weeks · 5 000 profiles/week</span>
+    <span class="badge">Null result</span>
     <span class="badge">Lledó &amp; Pavía (2024)</span>
   </div>
 </header>
@@ -356,7 +280,7 @@
       </div>
       <div class="pipe-arrow">→</div>
       <div class="pipe-step">
-        <div class="lang">Oracle + warm start</div>
+        <div class="lang">Warm start</div>
         <div class="label">Simulate aggregator</div>
       </div>
       <div class="pipe-arrow">→</div>
@@ -666,6 +590,48 @@
     </div>
   </section>
 
+  <!-- ── SURVEY SAMPLING ── -->
+  <section>
+    <h2>A survey sampling perspective</h2>
+    <p>
+      The finding that <code>random_market</code> beats every informativeness-based strategy
+      can be reframed through survey sampling theory. Estimating the competitor's tariff
+      surface from a limited weekly budget is a <strong>finite population estimation
+      problem</strong> — exactly what survey sampling has been optimising for decades.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Survey sampling concept</th><th>Equivalent in this project</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Simple random sampling (SRS)</td>
+            <td><code>random_market</code> — achieves representativeness <em>in expectation</em></td>
+          </tr>
+          <tr>
+            <td>Neyman allocation</td>
+            <td><code>segment_adaptive_cp</code> / <code>error_based_cp</code> — oversample high-variance strata; the formal guarantee these heuristics approximate</td>
+          </tr>
+          <tr>
+            <td>Balanced sampling (cube method)</td>
+            <td>Planned — guarantees the covariate distribution of the training batch matches the market population on all auxiliary variables simultaneously, every draw</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout insight">
+      <strong>Why the cube method could outperform <code>random_market</code>.</strong>
+      <code>random_market</code> achieves representativeness in expectation — individual weekly
+      batches can still deviate by chance, especially at a budget of 5,000 profiles. Balanced
+      sampling (Tillé &amp; Deville, 2004) removes that random deviation by construction:
+      the selected sample is guaranteed to match the population on all auxiliary variables
+      simultaneously. This is a strictly stronger property, at higher computational cost.
+    </div>
+  </section>
+
   <!-- ── REPO ── -->
   <section>
     <h2>Explore the project</h2>
@@ -678,6 +644,10 @@
           <tr>
             <td><a href="https://github.com/fischerdm/market-model-al" target="_blank" rel="noopener">GitHub repository</a></td>
             <td>Full source: oracle, AL loop, Streamlit dashboard</td>
+          </tr>
+          <tr>
+            <td><a href="https://market-model-al.streamlit.app/" target="_blank" rel="noopener">Streamlit dashboard</a></td>
+            <td>Interactive exploration of all 12 strategies, segment RMSE, SHAP cosine similarity, and tariff change simulations</td>
           </tr>
           <tr>
             <td><a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a></td>
