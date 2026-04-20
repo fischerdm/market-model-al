@@ -300,11 +300,11 @@
 
     <h3>Phase 1 — Oracle</h3>
     <p>
-      A LightGBM model is trained on <code>Premium ~ features</code> using all
-      renewal rows from the
-      <a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a>
-      motor insurance dataset (105,555 rows, 53,502 unique policies). This becomes the
-      <strong>oracle</strong>: given any policy profile, it returns a simulated
+      A LightGBM model is trained on <code>Premium ~ features</code> using all rows
+      from the <a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a>
+      motor insurance dataset (105,555 policy-year observations across 53,502 unique policies),
+      excluding claim-related features which are not observable at quote time on an aggregator.
+      This becomes the <strong>oracle</strong>: given any policy profile, it returns a simulated
       competitor quote.
     </p>
     <p>
