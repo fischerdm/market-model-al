@@ -770,37 +770,65 @@ with tab3:
 
     st.divider()
 
-    # ── Market-based AL ────────────────────────────────────────────────────────
-    st.subheader("Market-based AL")
-    st.caption("Draws from the market-representative pool and applies an informativeness filter.")
+    # ── Sampling strategies ────────────────────────────────────────────────────
+    st.subheader("Sampling strategies")
+    st.caption("Draw from a market-representative pool; differ in how they select from it.")
 
-    _strategy_card({
-        "name": "Informed market",
-        "key": "informed_market",
-        "summary": "Error-based informativeness scoring applied to a representative market pool — the best-of-both-worlds hybrid.",
-        "detail": (
-            "Each week it builds a large candidate pool using the same market composition as "
-            "`random_market` (real portfolio rows + synthetic supplement), scores every candidate "
-            "with a proxy model trained on relative residuals, and selects the top `weekly_budget` "
-            "rows — those where the competitor model is currently most wrong. "
-            "Because the pool is representative by construction, the scoring step cannot starve "
-            "mainstream segments the way a globally greedy strategy would."
-        ),
-        "strengths": [
-            "Representative pool ensures no segment is structurally excluded before scoring.",
-            "Informativeness filter focuses the budget on where the model is currently wrong.",
-            "Preserves natural feature correlations of real portfolio rows.",
-        ],
-        "weaknesses": [
-            "Scoring the full candidate pool adds computational cost vs. pure random_market.",
-            "Proxy model quality is limited by labeled set size — early weeks fall back toward random.",
-        ],
-        "when": (
-            "The principled best-of-both-worlds challenger to random_market. "
-            "If this hybrid still cannot beat random_market, the conclusion is definitive: "
-            "representativeness dominates informativeness in competitor tariff recovery."
-        ),
-    })
+    for info in [
+        {
+            "name": "Informed market",
+            "key": "informed_market",
+            "summary": "Error-based informativeness scoring applied to a representative market pool — the best-of-both-worlds hybrid.",
+            "detail": (
+                "Each week it builds a large candidate pool using the same market composition as "
+                "`random_market` (real portfolio rows + synthetic supplement), scores every candidate "
+                "with a proxy model trained on relative residuals, and selects the top `weekly_budget` "
+                "rows — those where the competitor model is currently most wrong. "
+                "Because the pool is representative by construction, the scoring step cannot starve "
+                "mainstream segments the way a globally greedy strategy would."
+            ),
+            "strengths": [
+                "Representative pool ensures no segment is structurally excluded before scoring.",
+                "Informativeness filter focuses the budget on where the model is currently wrong.",
+                "Preserves natural feature correlations of real portfolio rows.",
+            ],
+            "weaknesses": [
+                "Scoring the full candidate pool adds computational cost vs. pure random_market.",
+                "Proxy model quality is limited by labeled set size — early weeks fall back toward random.",
+            ],
+            "when": (
+                "The principled best-of-both-worlds challenger to random_market. "
+                "If this hybrid still cannot beat random_market, the conclusion is definitive: "
+                "representativeness dominates informativeness in competitor tariff recovery."
+            ),
+        },
+        {
+            "name": "Cube method (market)",
+            "key": "cube_market",
+            "summary": "Tillé-Deville balanced sampling: selects from a market pool such that sample means of all continuous features equal the population means by construction.",
+            "detail": (
+                "Each week it builds a representative pool 3× the weekly budget (same composition as "
+                "`random_market`), then applies the cube method flight phase to derive inclusion "
+                "probabilities that guarantee exact covariate balance on all 7 continuous features. "
+                "Where `random_market` achieves balance only in expectation, `cube_market` achieves it "
+                "every draw — the survey-sampling-optimal version of SRS."
+            ),
+            "strengths": [
+                "Exact covariate balance by construction — strictly stronger than SRS.",
+                "No model feedback required — purely sampling-based.",
+                "Grounded in survey sampling theory (Tillé & Deville, 2004).",
+            ],
+            "weaknesses": [
+                "Computationally heavier than random_market (~5–10 s/week vs. <0.1 s).",
+                "In practice only marginally better than random_market at n=5 000 profiles/week.",
+            ],
+            "when": (
+                "Use to verify that random_market is near the theoretical ceiling for representativeness-based "
+                "strategies. If cube_market cannot meaningfully beat random_market, SRS is essentially optimal."
+            ),
+        },
+    ]:
+        _strategy_card(info)
 
     st.divider()
 
