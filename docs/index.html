@@ -243,8 +243,9 @@
       A preparation step constructs a <em>market portfolio</em> from the company portfolio by
       supplementing under-represented segments via <code>create_market_supplement()</code>.
       The <code>market_supplement_ratio</code> parameter (default 10%) controls the supplement
-      fraction. The warm start and the <code>random_market</code> / <code>informed_market</code>
-      strategies draw from this corrected pool — training on a distribution that more closely
+      fraction. The warm start and all AL strategies draw anchors from this corrected pool —
+      <code>random_market</code>, <code>informed_market</code>, <code>cube_market</code>, and
+      the CP and Gaussian families alike — training on a distribution that more closely
       reflects real aggregator traffic. This is the structural reason the market strategies
       outperform CP and Gaussian strategies.
     </div>
