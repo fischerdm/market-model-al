@@ -580,15 +580,27 @@ with tab1:
     # ── Summary table ─────────────────────────────────────────────────────────
     st.subheader("Summary")
     all_weeks_t1 = sorted(df_t1["week"].unique().tolist())
-    summary_week_t1 = st.selectbox(
-        "Week",
-        options=all_weeks_t1,
-        index=len(all_weeks_t1) - 1,
-        key="summary_week_t1",
-    )
+    col_week_t1, col_sort_t1 = st.columns(2)
+    with col_week_t1:
+        summary_week_t1 = st.selectbox(
+            "Week",
+            options=all_weeks_t1,
+            index=len(all_weeks_t1) - 1,
+            key="summary_week_t1",
+        )
     tbl = summary_table(df_t1, selected_strategies, week=summary_week_t1)
+    with col_sort_t1:
+        sort_cols_t1 = list(tbl.columns)
+        default_sort_t1 = "RMSE (€)" if "RMSE (€)" in sort_cols_t1 else sort_cols_t1[0]
+        sort_by_t1 = st.selectbox(
+            "Sort by",
+            options=sort_cols_t1,
+            index=sort_cols_t1.index(default_sort_t1),
+            key="sort_t1",
+        )
+    ascending_t1 = sort_by_t1 != "SHAP similarity"
     st.dataframe(
-        tbl.style.format({
+        tbl.sort_values(sort_by_t1, ascending=ascending_t1).style.format({
             "Labeled profiles": "{:,.0f}",
             "RMSE (€)":         "{:.2f}",
             "Relative RMSE":    "{:.4f}",
@@ -641,21 +653,31 @@ with tab2:
             st.plotly_chart(fig, width="stretch")
 
         st.subheader("Segment RMSE summary")
+        seg_labels_t2 = [seg.label for seg in SEGMENTS]
         all_weeks_t2 = sorted(df_t2["week"].unique().tolist())
-        summary_week_t2 = st.selectbox(
-            "Week",
-            options=all_weeks_t2,
-            index=len(all_weeks_t2) - 1,
-            key="summary_week_t2",
-        )
+        col_week_t2, col_sort_t2 = st.columns(2)
+        with col_week_t2:
+            summary_week_t2 = st.selectbox(
+                "Week",
+                options=all_weeks_t2,
+                index=len(all_weeks_t2) - 1,
+                key="summary_week_t2",
+            )
+        with col_sort_t2:
+            sort_by_t2 = st.selectbox(
+                "Sort by segment",
+                options=seg_labels_t2,
+                index=0,
+                key="sort_t2",
+            )
         final_seg = (
             df_t2[df_t2["week"] == summary_week_t2]
             .set_index("strategy_label")[seg_cols]
         )
-        final_seg.columns = [seg.label for seg in SEGMENTS]
+        final_seg.columns = seg_labels_t2
         final_seg.index.name = "Strategy"
         st.dataframe(
-            final_seg.style.format("{:.2f}").highlight_min(
+            final_seg.sort_values(sort_by_t2, ascending=True).style.format("{:.2f}").highlight_min(
                 axis=0, props="background-color: #d4edda; color: black;"
             ),
             width="stretch",
