@@ -97,6 +97,12 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    - Gaussian strategies perform comparably to their CP counterparts; joint variation does not compensate for the absence of natural feature correlations
    - **Definitive conclusion**: representativeness dominates informativeness at every level — (1) random_cp vs informativeness CP, (2) random_market vs all, (3) informed_market (best hybrid) still loses to random_market
 
+### Survey sampling perspective and future work
+
+The finding that `random_market` beats all AL strategies can be reframed through survey sampling theory: estimating the tariff surface from a limited budget is a finite population estimation problem. `random_market` ≈ SRS from a market-corrected pool (representativeness in expectation). `segment_adaptive_cp` / `error_based_cp` approximate Neyman allocation (oversample high-variance strata).
+
+**Planned next strategy: `cube_method`** — balanced sampling via the Tillé & Deville (2004) cube method. Selects profiles such that the covariate distribution of the training batch exactly matches the market population on all auxiliary variables simultaneously, by construction — not just in expectation. The survey-sampling-optimal version of `random_market`. Known to be computationally expensive; approximations to be explored in implementation branch.
+
 ### No copula / generative model
 The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly.
 

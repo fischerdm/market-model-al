@@ -1,4 +1,6 @@
-# Recursive Model Improvement via Active Learning in Non-Life Pricing
+# When Random Wins: Active Learning for Competitor Pricing Intelligence
+
+We built 12 active learning strategies to reverse-engineer a competitor's insurance tariff from aggregator quotes. None of them beat random sampling.
 
 Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *competitor model*.
 
@@ -84,6 +86,24 @@ The central tension is the **exploration-exploitation tradeoff**: informativenes
 | **Root cause: exploration vs. exploitation** | Greedy informativeness (exploitation) pulls budget toward high-signal edge cases, starving mainstream segments. Representative sampling (exploration) covers the market proportionally by construction — and that is sufficient. |
 | **Restart is not always optimal** | After a targeted tariff change, a full restart discards valid labels from unchanged segments. Continuous scraping can win on global RMSE at week 10. |
 | **Disruption-adaptive** | Uses the week-on-week *change* in segment RMSE as a signal, not the absolute level. Fires on disruption, reverts to random once the gap closes, discards no labels. |
+
+## Survey sampling perspective
+
+The central finding — that `random_market` beats every informativeness-based AL strategy — can be reframed through survey sampling theory. The problem is fundamentally about **estimating a finite population (the tariff surface) from a limited budget**, a problem survey sampling has optimised for decades.
+
+| Survey sampling concept | Equivalent in this project |
+|---|---|
+| Simple random sampling (SRS) | `random_market` — achieves representativeness *in expectation* |
+| Neyman allocation | `segment_adaptive_cp` / `error_based_cp` — oversample high-variance strata; the formal guarantee that these heuristics approximate |
+| Balanced sampling (cube method) | Planned — guarantees covariate distribution of the training batch matches the market population exactly, every draw |
+
+`random_market` wins because representativeness is the dominant factor. Balanced sampling (Tillé & Deville, 2004) would deliver the same property with a formal guarantee and no random deviation — a strictly stronger approach, at higher computational cost.
+
+## Future work
+
+| Strategy | Description |
+|---|---|
+| `cube_method` | Balanced sampling via the cube method (Tillé & Deville, 2004): selects profiles such that the covariate distribution of the training batch exactly matches the market population on all auxiliary variables simultaneously. The survey-sampling-optimal version of `random_market`. Computationally expensive — approximations to be explored. |
 
 ## Project structure
 

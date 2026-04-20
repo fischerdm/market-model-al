@@ -590,6 +590,48 @@
     </div>
   </section>
 
+  <!-- ── SURVEY SAMPLING ── -->
+  <section>
+    <h2>A survey sampling perspective</h2>
+    <p>
+      The finding that <code>random_market</code> beats every informativeness-based strategy
+      can be reframed through survey sampling theory. Estimating the competitor's tariff
+      surface from a limited weekly budget is a <strong>finite population estimation
+      problem</strong> — exactly what survey sampling has been optimising for decades.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Survey sampling concept</th><th>Equivalent in this project</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Simple random sampling (SRS)</td>
+            <td><code>random_market</code> — achieves representativeness <em>in expectation</em></td>
+          </tr>
+          <tr>
+            <td>Neyman allocation</td>
+            <td><code>segment_adaptive_cp</code> / <code>error_based_cp</code> — oversample high-variance strata; the formal guarantee these heuristics approximate</td>
+          </tr>
+          <tr>
+            <td>Balanced sampling (cube method)</td>
+            <td>Planned — guarantees the covariate distribution of the training batch matches the market population on all auxiliary variables simultaneously, every draw</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout insight">
+      <strong>Why the cube method could outperform <code>random_market</code>.</strong>
+      <code>random_market</code> achieves representativeness in expectation — individual weekly
+      batches can still deviate by chance, especially at a budget of 5,000 profiles. Balanced
+      sampling (Tillé &amp; Deville, 2004) removes that random deviation by construction:
+      the selected sample is guaranteed to match the population on all auxiliary variables
+      simultaneously. This is a strictly stronger property, at higher computational cost.
+    </div>
+  </section>
+
   <!-- ── REPO ── -->
   <section>
     <h2>Explore the project</h2>
