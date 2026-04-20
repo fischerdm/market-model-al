@@ -375,20 +375,12 @@ with st.sidebar:
     selected_strategies = []
 
     with st.expander("Benchmark", expanded=True):
-        if "random_market" in available:
-            col_cb, col_help = st.columns([9, 1])
-            with col_cb:
-                if st.checkbox(STRATEGY_LABELS["random_market"], value=True, key="chk_random_market"):
-                    selected_strategies.append("random_market")
-            with col_help:
-                st.markdown(
-                    '<span title="Sampling strategy: draws real portfolio rows + a small '
-                    'synthetic supplement at random each week. No model feedback used. '
-                    'Included here as the primary benchmark because it outperforms all '
-                    'informativeness-based strategies.">❓</span>',
-                    unsafe_allow_html=True,
-                )
-        for s in ["random_cp", "random_gauss"]:
+        st.caption(
+            "Random market is a sampling strategy (no model feedback). Despite its simplicity, "
+            "it outperforms all informativeness-based strategies — making it the natural primary "
+            "benchmark. Random CP and Gaussian serve as baselines for the anchor-based strategies."
+        )
+        for s in ["random_market", "random_cp", "random_gauss"]:
             if s in available:
                 if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
                     selected_strategies.append(s)
