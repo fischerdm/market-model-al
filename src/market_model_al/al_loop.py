@@ -64,7 +64,9 @@ from market_model_al.profile_generator import (
     create_market_supplement,
     PROFILES_PER_ANCHOR,
     GAUSSIAN_PROFILES_PER_ANCHOR,
+    CONTINUOUS_FEATURES,
 )
+from market_model_al.cube_sampling import cube_sampling
 from market_model_al.segments import segment_rmse, segment_rel_rmse
 from market_model_al.strategies import (
     STRATEGIES,
@@ -169,6 +171,7 @@ class ALSimulation:
         market_supplement_ratio: float = _MARKET_SUPPLEMENT_RATIO,
         market_profile_method: str = _MARKET_PROFILE_METHOD,
         gaussian_sigma_frac: float = 0.3,
+        cube_pool_multiplier: int = 3,
         simulation_name: str = "",
     ) -> pd.DataFrame:
         """Run a full AL experiment and return per-week metrics.
@@ -241,8 +244,9 @@ class ALSimulation:
         # only the profile generator differs.  Strip the suffix to get the dispatch key.
         is_gauss         = strategy.endswith("_gauss")
         is_cp            = strategy.endswith("_cp")
-        is_market        = strategy in ("random_market", "informed_market")
+        is_market        = strategy in ("random_market", "informed_market", "cube_market")
         is_informed      = strategy == "informed_market"
+        is_cube          = strategy == "cube_market"
         if is_gauss:
             base_strategy = strategy[:-6]   # strip "_gauss" (6 chars) → e.g. "random"
         elif is_cp:
@@ -294,6 +298,12 @@ class ALSimulation:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
                   f"  pool_size={pool_size:,}  supplement_ratio={market_supplement_ratio}"
                   f"  method={market_profile_method}  weeks={n_weeks}")
+        elif strategy == "cube_market":
+            cube_pool_size = weekly_budget * cube_pool_multiplier
+            print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
+                  f"  cube_pool={cube_pool_size:,}  supplement_ratio={market_supplement_ratio}"
+                  f"  method={market_profile_method}  weeks={n_weeks}"
+                  f"  aux_vars={len(CONTINUOUS_FEATURES)}")
         elif is_gauss:
             print(f"  warm_start={len(labeled_X):,}  weekly_budget={weekly_budget:,}"
                   f"  n_anchors_base={n_anchors_base}  pool={n_pool}  selected={n_selected}"
@@ -433,6 +443,39 @@ class ALSimulation:
                 chosen = error_based_query(
                     competitor, labeled_X, labeled_y, candidate_pool, weekly_budget, rng
                 )
+                profiles = candidate_pool.iloc[chosen].reset_index(drop=True)
+                if len(profiles) == 0:
+                    continue
+
+            elif strategy == "cube_market":
+                # ── cube_market: cube-method balanced selection on market pool ─────
+                # Build a representative pool (same composition as random_market but
+                # cube_pool_multiplier times larger), then apply the Tillé-Deville
+                # cube method to select weekly_budget rows.  The selected batch is
+                # balanced on all continuous features by construction — sample means
+                # equal population means, not just in expectation as with SRS.
+                cube_pool_size  = weekly_budget * cube_pool_multiplier
+                n_supp_pool     = max(1, int(cube_pool_size * market_supplement_ratio))
+                n_real_pool     = cube_pool_size - n_supp_pool
+
+                supp_anchor_idx = rng.choice(
+                    self._anchor_pool_idx, size=market_n_anchors, replace=False
+                )
+                supplement_pool = create_market_supplement(
+                    self._real_X.iloc[supp_anchor_idx].reset_index(drop=True),
+                    n=n_supp_pool,
+                    method=market_profile_method,
+                    rng=rng,
+                    gaussian_sigma_frac=gaussian_sigma_frac,
+                )
+                real_idx    = rng.choice(self._anchor_pool_idx, size=n_real_pool, replace=False)
+                real_pool   = self._real_X.iloc[real_idx].reset_index(drop=True)
+
+                candidate_pool = pd.concat([supplement_pool, real_pool], ignore_index=True)
+                if len(candidate_pool) == 0:
+                    continue
+
+                chosen   = cube_sampling(candidate_pool, weekly_budget, CONTINUOUS_FEATURES, rng)
                 profiles = candidate_pool.iloc[chosen].reset_index(drop=True)
                 if len(profiles) == 0:
                     continue
