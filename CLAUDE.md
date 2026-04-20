@@ -62,13 +62,14 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    *Gaussian strategies* (`_gauss` suffix): identical selection logic, `generate_gaussian_profiles` instead of `generate_ceteris_paribus`:
    - `random_gauss`, `uncertainty_gauss`, `error_based_gauss`, `segment_adaptive_gauss`, `disruption_gauss`
 
-   *Market strategies* (no suffix):
+   *Market / sampling strategies* (no suffix):
    - `random_market` — `(1 − market_supplement_ratio)` real portfolio rows + `market_supplement_ratio` synthetic supplement (CP or Gaussian); models portfolio coverage gap
    - `informed_market` — same representative pool as `random_market`, then scored by `error_based_query`; selects top `weekly_budget` rows. Best-of-both-worlds hybrid: representativeness + informativeness.
+   - `cube_market` — builds a pool `cube_pool_multiplier` × weekly_budget rows (default 3×), applies Tillé-Deville cube method to select `weekly_budget` rows balanced on all 7 continuous features by construction. Implemented in `src/market_model_al/cube_sampling.py`. Results: marginally better than `random_market` in some settings, confirming SRS is near the theoretical ceiling for representativeness-based strategies.
 
    All strategies fall back to random when labeled set is empty. `shap_divergence` was removed (required oracle SHAP — not deployable).
 
-   **Strategy naming in `al_loop.py`**: suffix is stripped before dispatch (`_cp` → 3 chars, `_gauss` → 6 chars); `random_market` and `informed_market` have no suffix. Restart label = `{strategy}_restart` (e.g. `random_cp_restart`).
+   **Strategy naming in `al_loop.py`**: suffix is stripped before dispatch (`_cp` → 3 chars, `_gauss` → 6 chars); `random_market`, `informed_market`, and `cube_market` have no suffix. Restart label = `{strategy}_restart` (e.g. `random_cp_restart`).
 
    **Seed design**: per-run RNG is derived deterministically as `sha256(base_seed:simulation_name:strategy)`. Each (simulation, strategy) pair always gets the same seed regardless of call order or whether strategies are run in separate executions. Holdout is carved once in `ALSimulation.__init__` from `_master_rng` (unaffected). `run()` accepts `simulation_name: str = ""` for seed derivation.
 
@@ -79,7 +80,7 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    - `restart_at_tariff_change=True` clears the labeled set after **every** tariff-change week's evaluation
 
    **Configuration system** (`config/`):
-   - `config/simulation.yaml` — global params (n_weeks, weekly_budget, seed, strategies, metrics, restart_strategies) and a `simulations` list; `advanced:` block contains `anchor_space_multiplier`, `selection_fraction`, `gaussian_sigma_frac`, `market_supplement_ratio`, `market_profile_method`, `random_market.market_n_anchors`, `warmup_weeks`, `warmup_scale`
+   - `config/simulation.yaml` — global params (n_weeks, weekly_budget, seed, strategies, metrics, restart_strategies) and a `simulations` list; `advanced:` block contains `anchor_space_multiplier`, `selection_fraction`, `gaussian_sigma_frac`, `market_supplement_ratio`, `market_profile_method`, `random_market.market_n_anchors`, `cube_method.cube_pool_multiplier`, `warmup_weeks`, `warmup_scale`
    - `config/tariff_changes.yaml` — named perturbation library; definitions only, no timing
    - `src/market_model_al/config.py` — loader, resolver, perturbation factory
 
@@ -96,12 +97,13 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    - Full restart after targeted tariff change is not always optimal; `disruption_cp` is the principled alternative
    - Gaussian strategies perform comparably to their CP counterparts; joint variation does not compensate for the absence of natural feature correlations
    - **Definitive conclusion**: representativeness dominates informativeness at every level — (1) random_cp vs informativeness CP, (2) random_market vs all, (3) informed_market (best hybrid) still loses to random_market
+   - `cube_market` (Tillé-Deville balanced sampling) is sometimes marginally better than `random_market`, confirming SRS is already near the theoretical ceiling for representativeness-based strategies
 
-### Survey sampling perspective and future work
+### Survey sampling perspective
 
 The finding that `random_market` beats all AL strategies can be reframed through survey sampling theory: estimating the tariff surface from a limited budget is a finite population estimation problem. `random_market` ≈ SRS from a market-corrected pool (representativeness in expectation). `segment_adaptive_cp` / `error_based_cp` approximate Neyman allocation (oversample high-variance strata).
 
-**Planned next strategy: `cube_method`** — balanced sampling via the Tillé & Deville (2004) cube method. Selects profiles such that the covariate distribution of the training batch exactly matches the market population on all auxiliary variables simultaneously, by construction — not just in expectation. The survey-sampling-optimal version of `random_market`. Known to be computationally expensive; approximations to be explored in implementation branch.
+**`cube_market`** (implemented April 2026) — balanced sampling via the Tillé & Deville (2004) cube method. The survey-sampling-optimal version of `random_market`: selects profiles such that the covariate distribution exactly matches the market population on all auxiliary variables simultaneously, by construction. Results show `cube_market` is sometimes marginally better than `random_market`, which confirms that SRS is already so close to the theoretical ceiling that exact balance provides only a marginal additional gain. This is strong evidence for `random_market`'s robustness.
 
 ### No copula / generative model
 The copula was dropped. The real dataset (~105k rows) is large enough to serve as anchor points directly.
@@ -117,7 +119,7 @@ Python 3.12, LightGBM, SHAP, Streamlit, PyYAML. All notebooks are `.py` files (n
 ## Dashboard notes
 
 ### Sidebar
-Strategies are grouped in three collapsible expanders: **CP strategies**, **Gaussian strategies**, **Restart variants**. `random_market` and `informed_market` are standalone top-level checkboxes (only shown if their parquet exists). CP strategies are rendered with triangle markers; Gaussian strategies with circle markers; restart variants with dashed lines.
+Sidebar sections: **Benchmark** (random_market + random_cp + random_gauss, with a caption explaining the distinction), **Sampling strategies** (informed_market, cube_market — shown only if their parquet exists), **Anchor-based AL — CP**, **Anchor-based AL — Gaussian**, **Tariff-change response** (disruption + restart variants). CP strategies are rendered with triangle markers; Gaussian strategies with circle markers; restart variants with dashed lines. Summary tables in tab 1 (sort by metric) and tab 2 (sort by segment) have user-selectable sort columns, defaulting to RMSE and Young driver respectively.
 
 A `_LEGACY_STRATEGY_NAMES` dict in `load_results()` transparently remaps old strategy names (pre-`_cp` rename) so existing parquets work without re-running the simulation.
 

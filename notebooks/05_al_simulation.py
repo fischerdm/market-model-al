@@ -59,6 +59,7 @@ MARKET_N_ANCHORS:        int   = sim_cfg["market_n_anchors"]
 MARKET_SUPPLEMENT_RATIO: float = sim_cfg["market_supplement_ratio"]
 MARKET_PROFILE_METHOD:   str   = sim_cfg["market_profile_method"]
 GAUSSIAN_SIGMA:    float     = sim_cfg["gaussian_sigma_frac"]
+CUBE_POOL_MULT:    int       = sim_cfg["cube_pool_multiplier"]
 
 print("Simulation config:")
 print(f"  n_weeks={N_WEEKS}  weekly_budget={WEEKLY_BUDGET}  seed={SEED}")
@@ -106,8 +107,9 @@ PALETTE = {
     "error_based_gauss":            "#ffbb78",
     "segment_adaptive_gauss":       "#c5b0d5",
     "disruption_gauss":             "#98df8a",
-    # Hybrid
+    # Market-pool strategies
     "informed_market":              "#2ca02c",
+    "cube_market":                  "#9c27b0",
 }
 
 # ── Load warm start ────────────────────────────────────────────────────────────
@@ -156,6 +158,7 @@ def _run(strategy, sim_name, tc_pairs, restart=False, strategy_label=None):
         market_supplement_ratio=MARKET_SUPPLEMENT_RATIO,
         market_profile_method=MARKET_PROFILE_METHOD,
         gaussian_sigma_frac=GAUSSIAN_SIGMA,
+        cube_pool_multiplier=CUBE_POOL_MULT,
         simulation_name=sim_name,
     )
     df_run["simulation"] = sim_name

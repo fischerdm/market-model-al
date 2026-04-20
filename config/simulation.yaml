@@ -26,8 +26,9 @@ strategies:
   - error_based_gauss
   - segment_adaptive_gauss
   - disruption_gauss
-  # Hybrid: error-based scoring on a representative market pool.
+  # Market-pool strategies: real rows + synthetic supplement as candidate pool.
   - informed_market
+  - cube_market
 
 # ── Metrics ─────────────────────────────────────────────────────────────────
 # Controls which convergence metrics are computed each week.
@@ -140,6 +141,14 @@ advanced:
   #                     higher generation cost).  Does not affect the warm start.
   random_market:
     market_n_anchors: 50
+
+  # cube_market strategy: balanced sampling (Tillé & Deville 2004).
+  # Builds a representative pool of cube_pool_multiplier × weekly_budget rows,
+  # then applies the cube method to select exactly weekly_budget rows balanced
+  # on all continuous features.  Larger multipliers give the algorithm more
+  # candidates to balance across but increase computation time quadratically.
+  cube_method:
+    cube_pool_multiplier: 3
 
   # Gaussian-perturbation strategies (*_gauss): noise width as a fraction of
   # each continuous feature's range.  0.3 → σ ≈ 30 % of range per feature,

@@ -67,6 +67,9 @@ def load_simulation_cfg(path: str | Path) -> dict[str, Any]:
     rm = advanced.get("random_market") or {}
     cfg["market_n_anchors"] = int(rm.get("market_n_anchors", 50))
 
+    cm = advanced.get("cube_method") or {}
+    cfg["cube_pool_multiplier"] = int(cm.get("cube_pool_multiplier", 3))
+
     cfg["gaussian_sigma_frac"]      = float(advanced.get("gaussian_sigma_frac", 0.3))
     cfg["warmup_weeks"]             = int(advanced.get("warmup_weeks", 1))
     cfg["warmup_scale"]             = float(advanced.get("warmup_scale", 1.2))

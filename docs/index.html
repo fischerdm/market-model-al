@@ -189,12 +189,12 @@
 <header>
   <h1>When Random Wins: Active Learning<br>for Competitor Pricing Intelligence</h1>
 
-  <p class="subtitle">We built 12 active learning strategies to reverse-engineer a competitor's
+  <p class="subtitle">We built 13 strategies to reverse-engineer a competitor's
     insurance tariff from aggregator quotes. None of them beat random sampling.</p>
   <p class="byline">David Fischer · 2026</p>
   <div class="badge-row">
     <span class="badge">Python 3.12 · LightGBM · SHAP</span>
-    <span class="badge">Active Learning · 12 strategies</span>
+    <span class="badge">13 strategies</span>
     <span class="badge">Streamlit Dashboard</span>
     <span class="badge">Spain · Motor Insurance · 105 K policies</span>
     <span class="badge">10 weeks · 5 000 profiles/week</span>
@@ -364,6 +364,7 @@
           <tr><td>Random</td><td><code>_cp</code> · <code>_gauss</code></td><td>Uniform random anchor selection — no model required</td></tr>
           <tr><td>Random market</td><td>—</td><td>90% real portfolio rows + 10% synthetic supplement (CP or Gaussian) from random anchors; models portfolio coverage gap in aggregator traffic</td></tr>
           <tr><td>Informed market</td><td>—</td><td>Error-based scoring on a large representative pool (same market composition as random market); selects top <code>weekly_budget</code> rows — best-of-both-worlds hybrid</td></tr>
+          <tr><td>Cube method</td><td>—</td><td>Tillé-Deville balanced sampling on a pool 3× the weekly budget: selects profiles such that sample means of all continuous features equal the population means by construction, not just in expectation</td></tr>
           <tr><td>Uncertainty</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors with highest bootstrap prediction variance across ensemble members</td></tr>
           <tr><td>Error-based</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors with highest expected relative error, estimated by a proxy model trained on labeled residuals</td></tr>
           <tr><td>Segment-adaptive</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors scored by global + per-segment relative RMSE on the labeled set; converges toward random as segment gaps close</td></tr>
@@ -489,8 +490,8 @@
     <h2>Active learning results</h2>
 
     <p>
-      Simulation run: <strong>10 weeks · 5 000 profiles/week · 12 strategies</strong>
-      (5 CP variants, 5 Gaussian variants, random market, informed market).
+      Simulation run: <strong>10 weeks · 5 000 profiles/week · 13 strategies</strong>
+      (5 CP variants, 5 Gaussian variants, random market, informed market, cube method).
       Each week, 570 candidate anchors are scored, the top 10% (57) are profiled,
       and profiles are sampled to the weekly budget of 5 000.
     </p>
@@ -616,19 +617,20 @@
           </tr>
           <tr>
             <td>Balanced sampling (cube method)</td>
-            <td>Planned — guarantees the covariate distribution of the training batch matches the market population on all auxiliary variables simultaneously, every draw</td>
+            <td><code>cube_market</code> — implemented; sometimes marginally better than <code>random_market</code>, confirming SRS is already near the theoretical ceiling</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div class="callout insight">
-      <strong>Why the cube method could outperform <code>random_market</code>.</strong>
-      <code>random_market</code> achieves representativeness in expectation — individual weekly
-      batches can still deviate by chance, especially at a budget of 5,000 profiles. Balanced
-      sampling (Tillé &amp; Deville, 2004) removes that random deviation by construction:
-      the selected sample is guaranteed to match the population on all auxiliary variables
-      simultaneously. This is a strictly stronger property, at higher computational cost.
+    <div class="callout result">
+      <strong>Cube method result: SRS is near the theoretical ceiling.</strong>
+      <code>cube_market</code> (Tillé &amp; Deville, 2004) removes all random deviation from
+      the population mean by construction — a strictly stronger property than SRS.
+      In practice it is only marginally better than <code>random_market</code>.
+      This confirms that at a weekly budget of 5,000 profiles, random deviation from the
+      market distribution is already small enough to matter little. <code>random_market</code>
+      is not just simple — it is essentially optimal among representativeness-based strategies.
     </div>
   </section>
 

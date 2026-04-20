@@ -43,8 +43,9 @@ STRATEGY_LABELS = {
     "error_based_gauss":            "Error-based (Gaussian)",
     "segment_adaptive_gauss":       "Segment-adaptive (Gaussian)",
     "disruption_gauss":             "Disruption-adaptive (Gaussian)",
-    # Hybrid: error-based scoring on a representative market pool
+    # Market-pool strategies
     "informed_market":              "Informed market",
+    "cube_market":                  "Cube method (market)",
 }
 
 PALETTE = {
@@ -67,6 +68,8 @@ PALETTE = {
     "disruption_gauss":             "#f7b6b6",
     # Hybrid: bold teal-green, distinct from both random_market and error_based
     "informed_market":              "#2ca02c",
+    # Cube method: purple-magenta — distinct from all market and CP/Gauss traces
+    "cube_market":                  "#9c27b0",
 }
 
 METRIC_OPTIONS = {
@@ -325,6 +328,11 @@ st.set_page_config(
             "strategy globally and per segment. Even the principled best-of-both-worlds hybrid "
             "(a representative pool with an informativeness filter on top) cannot beat pure random "
             "market. Exploration wins.\n\n"
+            "To confirm that random market is near the theoretical ceiling, we implemented the cube "
+            "method (Tillé & Deville, 2004) — a balanced sampling strategy that guarantees exact "
+            "covariate balance by construction, not just in expectation. The result: cube method is "
+            "sometimes marginally better than random market, but not consistently across "
+            "segments or over time. SRS is essentially optimal.\n\n"
             "Built with Streamlit, LightGBM, SHAP, and Plotly.  \n"
             "David Fischer · April 2026"
         ),
@@ -372,15 +380,22 @@ with st.sidebar:
     selected_strategies = []
 
     with st.expander("Benchmark", expanded=True):
+        st.caption(
+            "Random market is a sampling strategy (no model feedback). Despite its simplicity, "
+            "it outperforms all informativeness-based strategies — making it the natural primary "
+            "benchmark. Random CP and Gaussian serve as baselines for the anchor-based strategies."
+        )
         for s in ["random_market", "random_cp", "random_gauss"]:
             if s in available:
                 if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
                     selected_strategies.append(s)
 
-    if "informed_market" in available:
-        with st.expander("Market-based AL", expanded=True):
-            if st.checkbox(STRATEGY_LABELS["informed_market"], value=True, key="chk_informed_market"):
-                selected_strategies.append("informed_market")
+    sampling_strategies = [s for s in ("informed_market", "cube_market") if s in available]
+    if sampling_strategies:
+        with st.expander("Sampling strategies", expanded=True):
+            for s in sampling_strategies:
+                if st.checkbox(STRATEGY_LABELS[s], value=True, key=f"chk_{s}"):
+                    selected_strategies.append(s)
 
     with st.expander("Anchor-based AL — CP", expanded=False):
         for s in cp_strategies:
@@ -570,15 +585,27 @@ with tab1:
     # ── Summary table ─────────────────────────────────────────────────────────
     st.subheader("Summary")
     all_weeks_t1 = sorted(df_t1["week"].unique().tolist())
-    summary_week_t1 = st.selectbox(
-        "Week",
-        options=all_weeks_t1,
-        index=len(all_weeks_t1) - 1,
-        key="summary_week_t1",
-    )
+    col_week_t1, col_sort_t1 = st.columns(2)
+    with col_week_t1:
+        summary_week_t1 = st.selectbox(
+            "Week",
+            options=all_weeks_t1,
+            index=len(all_weeks_t1) - 1,
+            key="summary_week_t1",
+        )
     tbl = summary_table(df_t1, selected_strategies, week=summary_week_t1)
+    with col_sort_t1:
+        sort_cols_t1 = list(tbl.columns)
+        default_sort_t1 = "RMSE (€)" if "RMSE (€)" in sort_cols_t1 else sort_cols_t1[0]
+        sort_by_t1 = st.selectbox(
+            "Sort by",
+            options=sort_cols_t1,
+            index=sort_cols_t1.index(default_sort_t1),
+            key="sort_t1",
+        )
+    ascending_t1 = sort_by_t1 != "SHAP similarity"
     st.dataframe(
-        tbl.style.format({
+        tbl.sort_values(sort_by_t1, ascending=ascending_t1).style.format({
             "Labeled profiles": "{:,.0f}",
             "RMSE (€)":         "{:.2f}",
             "Relative RMSE":    "{:.4f}",
@@ -631,21 +658,31 @@ with tab2:
             st.plotly_chart(fig, width="stretch")
 
         st.subheader("Segment RMSE summary")
+        seg_labels_t2 = [seg.label for seg in SEGMENTS]
         all_weeks_t2 = sorted(df_t2["week"].unique().tolist())
-        summary_week_t2 = st.selectbox(
-            "Week",
-            options=all_weeks_t2,
-            index=len(all_weeks_t2) - 1,
-            key="summary_week_t2",
-        )
+        col_week_t2, col_sort_t2 = st.columns(2)
+        with col_week_t2:
+            summary_week_t2 = st.selectbox(
+                "Week",
+                options=all_weeks_t2,
+                index=len(all_weeks_t2) - 1,
+                key="summary_week_t2",
+            )
+        with col_sort_t2:
+            sort_by_t2 = st.selectbox(
+                "Sort by segment",
+                options=seg_labels_t2,
+                index=0,
+                key="sort_t2",
+            )
         final_seg = (
             df_t2[df_t2["week"] == summary_week_t2]
             .set_index("strategy_label")[seg_cols]
         )
-        final_seg.columns = [seg.label for seg in SEGMENTS]
+        final_seg.columns = seg_labels_t2
         final_seg.index.name = "Strategy"
         st.dataframe(
-            final_seg.style.format("{:.2f}").highlight_min(
+            final_seg.sort_values(sort_by_t2, ascending=True).style.format("{:.2f}").highlight_min(
                 axis=0, props="background-color: #d4edda; color: black;"
             ),
             width="stretch",
@@ -738,37 +775,65 @@ with tab3:
 
     st.divider()
 
-    # ── Market-based AL ────────────────────────────────────────────────────────
-    st.subheader("Market-based AL")
-    st.caption("Draws from the market-representative pool and applies an informativeness filter.")
+    # ── Sampling strategies ────────────────────────────────────────────────────
+    st.subheader("Sampling strategies")
+    st.caption("Draw from a market-representative pool; differ in how they select from it.")
 
-    _strategy_card({
-        "name": "Informed market",
-        "key": "informed_market",
-        "summary": "Error-based informativeness scoring applied to a representative market pool — the best-of-both-worlds hybrid.",
-        "detail": (
-            "Each week it builds a large candidate pool using the same market composition as "
-            "`random_market` (real portfolio rows + synthetic supplement), scores every candidate "
-            "with a proxy model trained on relative residuals, and selects the top `weekly_budget` "
-            "rows — those where the competitor model is currently most wrong. "
-            "Because the pool is representative by construction, the scoring step cannot starve "
-            "mainstream segments the way a globally greedy strategy would."
-        ),
-        "strengths": [
-            "Representative pool ensures no segment is structurally excluded before scoring.",
-            "Informativeness filter focuses the budget on where the model is currently wrong.",
-            "Preserves natural feature correlations of real portfolio rows.",
-        ],
-        "weaknesses": [
-            "Scoring the full candidate pool adds computational cost vs. pure random_market.",
-            "Proxy model quality is limited by labeled set size — early weeks fall back toward random.",
-        ],
-        "when": (
-            "The principled best-of-both-worlds challenger to random_market. "
-            "If this hybrid still cannot beat random_market, the conclusion is definitive: "
-            "representativeness dominates informativeness in competitor tariff recovery."
-        ),
-    })
+    for info in [
+        {
+            "name": "Informed market",
+            "key": "informed_market",
+            "summary": "Error-based informativeness scoring applied to a representative market pool — the best-of-both-worlds hybrid.",
+            "detail": (
+                "Each week it builds a large candidate pool using the same market composition as "
+                "`random_market` (real portfolio rows + synthetic supplement), scores every candidate "
+                "with a proxy model trained on relative residuals, and selects the top `weekly_budget` "
+                "rows — those where the competitor model is currently most wrong. "
+                "Because the pool is representative by construction, the scoring step cannot starve "
+                "mainstream segments the way a globally greedy strategy would."
+            ),
+            "strengths": [
+                "Representative pool ensures no segment is structurally excluded before scoring.",
+                "Informativeness filter focuses the budget on where the model is currently wrong.",
+                "Preserves natural feature correlations of real portfolio rows.",
+            ],
+            "weaknesses": [
+                "Scoring the full candidate pool adds computational cost vs. pure random_market.",
+                "Proxy model quality is limited by labeled set size — early weeks fall back toward random.",
+            ],
+            "when": (
+                "The principled best-of-both-worlds challenger to random_market. "
+                "If this hybrid still cannot beat random_market, the conclusion is definitive: "
+                "representativeness dominates informativeness in competitor tariff recovery."
+            ),
+        },
+        {
+            "name": "Cube method (market)",
+            "key": "cube_market",
+            "summary": "Tillé-Deville balanced sampling: selects from a market pool such that sample means of all continuous features equal the population means by construction.",
+            "detail": (
+                "Each week it builds a representative pool 3× the weekly budget (same composition as "
+                "`random_market`), then applies the cube method flight phase to derive inclusion "
+                "probabilities that guarantee exact covariate balance on all 7 continuous features. "
+                "Where `random_market` achieves balance only in expectation, `cube_market` achieves it "
+                "every draw — the survey-sampling-optimal version of SRS."
+            ),
+            "strengths": [
+                "Exact covariate balance by construction — strictly stronger than SRS.",
+                "No model feedback required — purely sampling-based.",
+                "Grounded in survey sampling theory (Tillé & Deville, 2004).",
+            ],
+            "weaknesses": [
+                "Computationally heavier than random_market (~5–10 s/week vs. <0.1 s).",
+                "In practice only marginally better than random_market at n=5 000 profiles/week.",
+            ],
+            "when": (
+                "Use to verify that random_market is near the theoretical ceiling for representativeness-based "
+                "strategies. If cube_market cannot meaningfully beat random_market, SRS is essentially optimal."
+            ),
+        },
+    ]:
+        _strategy_card(info)
 
     st.divider()
 
