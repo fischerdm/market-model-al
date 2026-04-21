@@ -581,16 +581,6 @@
       pricing is one of the most sensitive and frequently debated segments in motor insurance.
     </div>
 
-    <div class="framed-box">
-      <h4>Why the best-of-both-worlds hybrid fails</h4>
-      The error-based proxy model is noisy, and its errors are systematically correlated
-      with genuine outliers — young drivers, high-powered cars. Even starting from a
-      representative pool, the scoring step skews selection toward edge cases, starving
-      mainstream coverage. Since the holdout is population-representative, mainstream
-      coverage dominates the RMSE. SRS from a representative pool is already near-optimal:
-      any selection filter layered on top can only introduce bias.
-    </div>
-
     <h3>Why exploitation loses to exploration</h3>
     <p>
       Greedy informativeness strategies concentrate scraping budget on high-signal edge
@@ -599,6 +589,8 @@
       the real data distribution, which naturally matches a population-representative holdout.
       When the scoring pool is made representative first (informed market), the informativeness
       filter still introduces enough variance in anchor selection to hurt mainstream coverage.
+      SRS from a representative pool is already near-optimal: any selection filter layered
+      on top can only introduce bias.
     </p>
 
     <h3>Tariff change: restart is not always optimal</h3>
