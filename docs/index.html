@@ -285,7 +285,7 @@
         <li>Does an active learning query strategy rediscover systematic ceteris paribus profiling on its own — varying one factor at a time while holding all others fixed?</li>
         <li>Do Gaussian joint perturbations — varying <em>all</em> features simultaneously around an anchor — outperform CP sweeps by exposing LightGBM to genuine multivariate variation within each anchor's batch?</li>
         <li>Can a best-of-both-worlds hybrid — applying an informativeness filter within a representative pool — outperform pure random market scraping?</li>
-        <li>Does balanced sampling via the cube method (Tillé &amp; Deville, 2004) improve on simple random market scraping — and how close is SRS to the theoretical optimum?</li>
+        <li>Does balanced sampling via the cube method (Tillé &amp; Deville, 2004) improve on simple random market scraping — and how close is simple random sampling (SRS) to the theoretical optimum?</li>
       </ol>
     </div>
   </section>
@@ -589,8 +589,8 @@
       the real data distribution, which naturally matches a population-representative holdout.
       When the scoring pool is made representative first (informed market), the informativeness
       filter still introduces enough variance in anchor selection to hurt mainstream coverage.
-      SRS from a representative pool is already near-optimal: any selection filter layered
-      on top can only introduce bias.
+      Random sampling from a representative pool is already near-optimal: any selection
+      filter layered on top can only introduce bias.
     </p>
 
     <h3>Tariff change: restart is not always optimal</h3>
