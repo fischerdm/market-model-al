@@ -1,6 +1,6 @@
 # When Random Wins: Active Learning for Competitor Pricing Intelligence
 
-We built 13 strategies to reverse-engineer a competitor's insurance tariff from aggregator quotes. None of them beat random sampling.
+Thirteen strategies were designed to reverse-engineer a competitor's insurance tariff from aggregator quotes. None outperformed random sampling.
 
 Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *competitor model*.
 
@@ -14,13 +14,13 @@ The end deliverable is a **Streamlit dashboard** for interactively exploring and
 
 ### Phase 1 — Oracle: learn the competitor's pricing engine
 
-- Fit a **LightGBM oracle** on `Premium ~ features` across all renewal years → the competitor's pricing engine
+- Fit a **LightGBM oracle** on `Premium ~ features` using all rows from the dataset (105,555 policy-year observations across 53,502 unique policies), excluding current-year claim outcomes (`Cost_claims_year`, `N_claims_year`) and claim history features (`N_claims_history`, `R_Claims_history`) → the competitor's pricing engine
 - Dataset: Lledó, Josep; Pavía, Jose M. (2024), *Dataset of an actual motor vehicle insurance portfolio*, Mendeley Data V2, [doi: 10.17632/5cxyb5fp4f.2](https://doi.org/10.17632/5cxyb5fp4f.2)
 - Validate oracle structure with **SHAP dependence plots** (driver age U-curve, vehicle power, key interactions — actuarial sanity check)
 
 ### Company portfolio vs. market portfolio
 
-The Lledó dataset represents a *company* portfolio — the policies actually held by one insurer. This is not the same as what the company would observe on an aggregator.
+The Lledó dataset represents a *company* portfolio — the policies actually held by one insurer. This is not the same as the full quote traffic an insurer receives via the aggregator — all profiles for which a premium is requested, regardless of whether they convert.
 
 **The aggregator loop:** a user submits a profile on a price comparison website; the request is forwarded to every participating insurer; each insurer returns a quote. The company therefore sees **all quote requests arriving via the aggregator** — the full market, not just its own policyholders. Because premiums are price-elastic, segments where the company is uncompetitive generate few conversions and are under-represented in its portfolio, even though the company still receives those quote requests.
 
@@ -32,7 +32,7 @@ The Lledó dataset represents a *company* portfolio — the policies actually he
 
 **Two profile generators** are compared:
 
-- **Ceteris-paribus (CP):** for each anchor row, each continuous feature is swept one at a time across its full range while all other features are held fixed. Produces 254 profiles per anchor. Mirrors standard aggregator scraping practice.
+- **Ceteris-paribus (CP):** for each anchor row, each continuous feature is swept one at a time across its full range while all other features are held fixed. Produces 254 profiles per anchor.
 - **Gaussian perturbations:** for each anchor row, all continuous features are perturbed simultaneously with independent Gaussian noise (σ = `gaussian_sigma_frac × feature_range`). Values are clipped and constraint-validated. Produces 254 profiles per anchor (same budget). Tests whether joint feature variation allows LightGBM to learn interaction effects more efficiently than axis-aligned CP sweeps.
 
 **Warm start** seeds the competitor model with `warmup_weeks × weekly_budget` rows (default: 1 × 5,000 = 5,000), simulating organic quote requests arriving before the systematic AL loop begins. Composition mirrors `random_market`: real portfolio rows topped up with a synthetic supplement via `create_market_supplement()`. A `warmup_scale` factor (default 1.2) oversamples before validation to guarantee exact counts after constraint dropout.
@@ -55,7 +55,7 @@ profiles        → trimmed to weekly_budget from the top-ranked anchors first
 | Strategy | Query criterion | Deployable in practice? |
 |---|---|---|
 | `random_cp` / `random_gauss` | Uniform random anchor selection — no model required | Yes |
-| `random_market` | 90% real portfolio rows + 10% synthetic supplement (CP or Gaussian) from random anchors; split controlled by `market_supplement_ratio` | Yes |
+| `random_market` | Uniform random selection from the market-corrected pool — no scoring required | Yes |
 | `informed_market` | Error-based scoring on a large representative pool (same market composition as `random_market`); selects top `weekly_budget` rows — best-of-both-worlds hybrid | Yes |
 | `cube_market` | Tillé-Deville cube method on a pool 3× the weekly budget: selects profiles balanced on all 7 continuous features by construction, not just in expectation | Yes |
 | `uncertainty_cp` / `_gauss` | Anchors where bootstrap prediction variance is highest | Yes |
@@ -70,8 +70,10 @@ Convergence is tracked in two metrics:
 **Tariff change simulation**: a `PerturbedOracleEngine` can be injected at one or more configurable weeks within a single simulation run to simulate a competitor repricing event (e.g. young-driver surcharge +20%, area repricing, or composed stacked shocks). Multiple shocks can be chained — the competitor model experiences all of them in one continuous timeline, with the RMSE curve measuring recovery of the *currently active* tariff at each point. Simulations and perturbation types are fully defined in YAML config files, with no code changes required to add new scenarios.
 
 **Core research questions**:
-1. Does an AL strategy rediscover systematic ceteris paribus profiling on its own?
-2. Do Gaussian joint perturbations outperform CP sweeps by exposing LightGBM to multi-feature variation within each anchor's batch?
+1. Does an AL strategy rediscover systematic ceteris paribus profiling on its own — varying one factor at a time while holding all others fixed?
+2. Do Gaussian joint perturbations — varying all features simultaneously around an anchor — outperform CP sweeps by exposing LightGBM to genuine multivariate variation within each anchor's batch?
+3. Can a best-of-both-worlds hybrid — applying an informativeness filter within a representative pool — outperform pure random market scraping?
+4. Does balanced sampling via the cube method (Tillé & Deville, 2004) improve on simple random market scraping — and how close is simple random sampling (SRS) to the theoretical optimum?
 
 ## Simulation findings (10-week run, 5 000 profiles/week)
 
@@ -85,7 +87,7 @@ The central tension is the **exploration-exploitation tradeoff**: informativenes
 | **Random beats sophisticated CP strategies globally** | Among CP strategies, random anchor sampling matches or outperforms all informativeness-based strategies on global RMSE and SHAP cosine similarity at 10 weeks. |
 | **Error-based recovers young drivers faster** | Segment-level RMSE reveals that `error_based_cp` converges faster on young drivers (age < 30) — the one segment where informativeness pays. |
 | **Root cause: exploration vs. exploitation** | Greedy informativeness (exploitation) pulls budget toward high-signal edge cases, starving mainstream segments. Representative sampling (exploration) covers the market proportionally by construction — and that is sufficient. |
-| **Restart is not always optimal** | After a targeted tariff change, a full restart discards valid labels from unchanged segments. Continuous scraping can win on global RMSE at week 10. |
+| **Continuous scraping outperforms restart** | After a targeted tariff change, a full restart discards valid labels from unchanged segments. Continuous scraping can win on global RMSE at week 10. |
 | **Disruption-adaptive** | Uses the week-on-week *change* in segment RMSE as a signal, not the absolute level. Fires on disruption, reverts to random once the gap closes, discards no labels. |
 
 ## Survey sampling perspective
