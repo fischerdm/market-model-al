@@ -343,25 +343,36 @@
       The competitor model is seeded with a <strong>warm start</strong> of
       <code>warmup_weeks × weekly_budget</code> rows (default: 1 × 5,000 = 5,000),
       simulating organic quote requests arriving via the aggregator before the systematic
-      AL loop begins. Composition mirrors <code>random_market</code>: real portfolio rows
+      scraping loop begins. Composition mirrors <code>random_market</code>: real portfolio rows
       topped up with a synthetic supplement. A <code>warmup_scale</code> oversampling factor
       (default 1.2) guarantees exact counts after constraint validation dropout.
     </p>
     <p>
-      The loop then runs <strong>weekly</strong>. Two profile generators are compared:
+      The loop then runs <strong>weekly</strong>. Three families of strategies are compared:
     </p>
     <ul style="margin: 0 0 14px 20px;">
-      <li><strong>Ceteris-paribus (CP):</strong> each continuous feature is swept one at a time across its full range, all other features held fixed. 254 profiles per anchor. Mirrors standard scraping practice.</li>
+      <li><strong>Ceteris-paribus (CP):</strong> each continuous feature is swept one at a time across its full range, all other features held fixed. 254 profiles per anchor.</li>
       <li><strong>Gaussian perturbations:</strong> all continuous features are perturbed <em>simultaneously</em> with independent Gaussian noise. Same 254-profile budget. Tests whether joint variation enables faster interaction learning.</li>
+      <li><strong>Market sampling</strong> (<code>random_market</code>, <code>informed_market</code>, <code>cube_market</code>): draws real rows directly from the market-corrected pool, preserving natural feature correlations. No synthetic profile generation.</li>
     </ul>
     <p>
-      Each week, a pool of <code>n_anchors_base × anchor_space_multiplier</code> candidates
-      is scored, the top <code>selection_fraction</code> are profiled, and the resulting
-      profiles are trimmed to the weekly budget from the top-ranked anchors first — so the
-      highest-scoring anchors always contribute before lower-ranked ones are cut. Budget
-      converts to base anchors as <code>n_anchors_base = 5 000 ÷ 254 ≈ 19</code>; with
-      defaults <code>anchor_space_multiplier = 30</code> and <code>selection_fraction = 10%</code>
+      For CP and Gaussian strategies, anchor selection works as follows: each week, a pool
+      of <code>n_anchors_base × anchor_space_multiplier</code> candidates is scored, the top
+      <code>selection_fraction</code> are profiled, and the resulting profiles are trimmed to
+      the weekly budget from the top-ranked anchors first — so the highest-scoring anchors
+      always contribute before lower-ranked ones are cut. Budget converts to base anchors as
+      <code>n_anchors_base = 5 000 ÷ 254 ≈ 19</code>; with defaults
+      <code>anchor_space_multiplier = 30</code> and <code>selection_fraction = 10%</code>
       this means 570 candidates scored → 57 anchors profiled → 5 000 profiles labeled.
+    </p>
+    <p>
+      For market sampling strategies, no anchor profiling is involved.
+      <code>random_market</code> draws rows directly from the market-corrected pool.
+      <code>informed_market</code> draws a large representative pool and selects the top
+      <code>weekly_budget</code> rows by expected prediction error.
+      <code>cube_market</code> builds a pool of 3× the weekly budget and applies the
+      Tillé-Deville cube method to select a sample whose covariate means exactly match
+      the population — balance by construction rather than in expectation.
     </p>
 
     <div class="table-wrap">
@@ -371,7 +382,7 @@
         </thead>
         <tbody>
           <tr><td>Random</td><td><code>_cp</code> · <code>_gauss</code></td><td>Uniform random anchor selection — no model required</td></tr>
-          <tr><td>Random market</td><td>—</td><td>90% real portfolio rows + 10% synthetic supplement (CP or Gaussian) from random anchors; models portfolio coverage gap in aggregator traffic</td></tr>
+          <tr><td>Random market</td><td>—</td><td>Uniform random selection from the market-corrected pool — no scoring required</td></tr>
           <tr><td>Informed market</td><td>—</td><td>Error-based scoring on a large representative pool (same market composition as random market); selects top <code>weekly_budget</code> rows — best-of-both-worlds hybrid</td></tr>
           <tr><td>Cube method</td><td>—</td><td>Tillé-Deville balanced sampling on a pool 3× the weekly budget: selects profiles such that sample means of all continuous features equal the population means by construction, not just in expectation</td></tr>
           <tr><td>Uncertainty</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors with highest bootstrap prediction variance across ensemble members</td></tr>
