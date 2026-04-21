@@ -658,6 +658,16 @@
       </table>
     </div>
 
+    <p>
+      Neyman allocation was not implemented as a standalone strategy because it is already
+      approximated by the informativeness-based strategies in this study
+      (<code>segment_adaptive_cp</code>, <code>error_based_cp</code>). The cube method was
+      chosen as the survey-sampling complement because it only requires observable auxiliary
+      variables. Neyman allocation could in principle be implemented by estimating stratum
+      variances from the labeled set — but this is already what <code>segment_adaptive_cp</code>
+      approximates.
+    </p>
+
     <div class="callout result">
       <strong>Cube method result: SRS is near the theoretical ceiling.</strong>
       <code>cube_market</code> (Tillé &amp; Deville, 2004) removes all random deviation from
