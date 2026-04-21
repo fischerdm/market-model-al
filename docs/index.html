@@ -146,6 +146,20 @@
     }
     .callout strong { font-weight: 700; }
 
+    .framed-box {
+      border: 1.5px solid #0f3460;
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 20px 0;
+      font-size: 0.95rem;
+    }
+    .framed-box h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #0f3460;
+      margin-bottom: 8px;
+    }
+
     /* ── tables ── */
     .table-wrap { overflow-x: auto; margin: 18px 0; }
     table {
@@ -535,8 +549,8 @@
     </div>
 
     <div class="callout insight">
-      <strong>Why: CP profiles are structurally limited.</strong> A CP profile sweeping
-      driver age from 18 to 80 holds Power, vehicle age, and every other feature at a single
+      <strong>Why: CP profiles are structurally limited.</strong> For example, a CP profile sweeping
+      driver age from 18 to 80 holds <code>Power</code>, vehicle age, and every other feature at a single
       anchor value. The resulting training data covers marginal tariff curves well but
       systematically under-represents the multivariate interactions that drive pricing
       variation. Real observed quotes have no such constraint — they carry the full joint
@@ -565,6 +579,16 @@
       residuals are systematically large early in the run, giving <code>error_based</code>
       a clear signal to concentrate budget. The effect is commercially relevant — young-driver
       pricing is one of the most sensitive and frequently debated segments in motor insurance.
+    </div>
+
+    <div class="framed-box">
+      <h4>Why the best-of-both-worlds hybrid fails</h4>
+      The error-based proxy model is noisy, and its errors are systematically correlated
+      with genuine outliers — young drivers, high-powered cars. Even starting from a
+      representative pool, the scoring step skews selection toward edge cases, starving
+      mainstream coverage. Since the holdout is population-representative, mainstream
+      coverage dominates the RMSE. SRS from a representative pool is already near-optimal:
+      any selection filter layered on top can only introduce bias.
     </div>
 
     <h3>Why exploitation loses to exploration</h3>
