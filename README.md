@@ -28,18 +28,19 @@ The Lledó dataset represents a *company* portfolio — the policies actually he
 
 > **Important distinction.** The oracle (Phase 1) is trained on the *company portfolio* only — and intentionally so. The oracle represents the competitor's own pricing engine, learned from their own data. The market portfolio correction applies only to Phase 2: it adjusts the distribution of profiles that *our* competitor model is trained on during the AL loop, simulating what we would observe arriving via the aggregator.
 
-### Phase 2 — Active learning loop
+### Phase 2 — Weekly scraping and retraining loop
 
-**Two profile generators** are compared:
+**Three families of strategies** are compared:
 
 - **Ceteris-paribus (CP):** for each anchor row, each continuous feature is swept one at a time across its full range while all other features are held fixed. Produces 254 profiles per anchor.
 - **Gaussian perturbations:** for each anchor row, all continuous features are perturbed simultaneously with independent Gaussian noise (σ = `gaussian_sigma_frac × feature_range`). Values are clipped and constraint-validated. Produces 254 profiles per anchor (same budget). Tests whether joint feature variation allows LightGBM to learn interaction effects more efficiently than axis-aligned CP sweeps.
+- **Market sampling** (`random_market`, `informed_market`, `cube_market`): draws real rows directly from the market-corrected pool, preserving natural feature correlations. No synthetic profile generation.
 
-**Warm start** seeds the competitor model with `warmup_weeks × weekly_budget` rows (default: 1 × 5,000 = 5,000), simulating organic quote requests arriving before the systematic AL loop begins. Composition mirrors `random_market`: real portfolio rows topped up with a synthetic supplement via `create_market_supplement()`. A `warmup_scale` factor (default 1.2) oversamples before validation to guarantee exact counts after constraint dropout.
+**Warm start** seeds the competitor model with `warmup_weeks × weekly_budget` rows (default: 1 × 5,000 = 5,000), simulating organic quote requests arriving before the systematic scraping loop begins. Composition mirrors `random_market`: real portfolio rows topped up with a synthetic supplement via `create_market_supplement()`. A `warmup_scale` factor (default 1.2) oversamples before validation to guarantee exact counts after constraint dropout.
 
-The **weekly AL loop** selects anchors using a query strategy, generates profiles, labels them via the oracle, and retrains the competitor model:
+The **weekly loop** labels a batch of profiles via the oracle and retrains the competitor model. For CP and Gaussian strategies, anchor selection works as follows:
 
-**Budget and anchor pool**
+**Budget and anchor pool (CP and Gaussian)**
 
 ```
 n_anchors_base  = weekly_budget // profiles_per_anchor   # e.g. 5 000 ÷ 254 = 19
@@ -50,7 +51,9 @@ profiles        → trimmed to weekly_budget from the top-ranked anchors first
 
 `anchor_space_multiplier` (default 30) controls how wide the candidate field is. `selection_fraction` (default 10%) controls what share is profiled — increase it if Gaussian validation dropout leaves the weekly budget under-utilised. Trimming by rank means the highest-scoring anchors always contribute their profiles before lower-ranked ones are cut.
 
-**AL strategies** — each has a CP variant (`_cp`) and a Gaussian variant (`_gauss`):
+For market sampling strategies, no anchor profiling is involved. `random_market` draws rows directly from the market-corrected pool. `informed_market` draws a large representative pool and selects the top `weekly_budget` rows by expected prediction error. `cube_market` builds a pool of 3× the weekly budget and applies the Tillé-Deville cube method to select a sample whose covariate means exactly match the population — balance by construction rather than in expectation.
+
+Anchor-based strategies come in two variants — CP (`_cp`) and Gaussian (`_gauss`) — corresponding to the two profile generators described above:
 
 | Strategy | Query criterion | Deployable in practice? |
 |---|---|---|
