@@ -155,7 +155,7 @@ market-model-al/
 
 ## Setup
 
-**Prerequisites:** [pyenv](https://github.com/pyenv/pyenv) must be installed (`brew install pyenv`) to manage the Python version.
+**Prerequisites:** [pyenv](https://github.com/pyenv/pyenv) must be installed to manage the Python version. On macOS: `brew install pyenv`. For other platforms see the [pyenv installation docs](https://github.com/pyenv/pyenv#installation).
 
 Pin the Python version for this project (creates a `.python-version` file):
 
