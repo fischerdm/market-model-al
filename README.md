@@ -1,6 +1,6 @@
 # When Random Wins: Active Learning for Competitor Pricing Intelligence
 
-This project simulates the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build and continuously retrain a **competitor model** — a replica of a competitor's pricing engine in non-life insurance.
+This project simulates the process of scraping competitor quotes from aggregator websites to build and continuously retrain a **competitor model** — a replica of a competitor's pricing engine in non-life insurance.
 
 Thirteen strategies were designed to reverse-engineer a competitor tariff from synthetic aggregator quotes, mimicking the weekly scraping and retraining loop in practice: each week, a batch of policy profiles is submitted to the simulated aggregator, the returned quotes label the training set, and the competitor model is retrained. None of the strategies outperformed random sampling. Even the cube method, which achieves exact covariate balance by construction, is only marginally better in some settings.
 
@@ -8,7 +8,7 @@ Thirteen strategies were designed to reverse-engineer a competitor tariff from s
 
 An insurer can train a competitor model by scraping quoted premiums from aggregator platforms. This project simulates that iterative process in a controlled synthetic environment where the ground truth is known.
 
-The real dataset is treated as the competitor's actual tariff. A LightGBM oracle learns that tariff and can return a premium for any policy profile — simulating the function of an aggregator like comparis.ch. The AL loop then tests how efficiently a competitor model can recover the oracle from a limited scraping budget.
+The real dataset is treated as the competitor's actual tariff. A LightGBM oracle learns that tariff and can return a premium for any policy profile — simulating the function of an aggregator. The AL loop then tests how efficiently a competitor model can recover the oracle from a limited scraping budget.
 
 The end deliverable is a **Streamlit dashboard** for interactively exploring and comparing AL query strategies.
 
