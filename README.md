@@ -1,8 +1,8 @@
 # When Random Wins: Active Learning for Competitor Pricing Intelligence
 
-Active learning simulation for non-life pricing, modelling the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build a *competitor model*.
+This project simulates the process of scraping competitor quotes from aggregator websites (e.g. comparis.ch) to build and continuously retrain a **competitor model** — a replica of a competitor's pricing engine in non-life insurance.
 
-Thirteen strategies were designed to reverse-engineer a competitor's insurance tariff from aggregator quotes. None outperformed random sampling. Even the cube method, which achieves exact covariate balance by construction, is only marginally better in some settings.
+Thirteen strategies were designed to reverse-engineer a competitor tariff from synthetic aggregator quotes, mimicking the weekly scraping and retraining loop in practice: each week, a batch of policy profiles is submitted to the simulated aggregator, the returned quotes label the training set, and the competitor model is retrained. None of the strategies outperformed random sampling. Even the cube method, which achieves exact covariate balance by construction, is only marginally better in some settings.
 
 ## Concept
 
