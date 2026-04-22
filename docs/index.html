@@ -146,6 +146,20 @@
     }
     .callout strong { font-weight: 700; }
 
+    .framed-box {
+      border: 1.5px solid #0f3460;
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 20px 0;
+      font-size: 0.95rem;
+    }
+    .framed-box h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #0f3460;
+      margin-bottom: 8px;
+    }
+
     /* ── tables ── */
     .table-wrap { overflow-x: auto; margin: 18px 0; }
     table {
@@ -189,17 +203,22 @@
 <header>
   <h1>When Random Wins: Active Learning<br>for Competitor Pricing Intelligence</h1>
 
-  <p class="subtitle">We built 13 strategies to reverse-engineer a competitor's
-    insurance tariff from aggregator quotes. None of them beat random sampling.</p>
-  <p class="byline">David Fischer · 2026</p>
+  <p class="subtitle">Thirteen strategies were designed to reverse-engineer a competitor's
+    insurance tariff from aggregator quotes. None outperformed random sampling.</p>
+  <p class="byline">David Fischer · April 2026</p>
   <div class="badge-row">
     <span class="badge">Python 3.12 · LightGBM · SHAP</span>
     <span class="badge">13 strategies</span>
     <span class="badge">Streamlit Dashboard</span>
     <span class="badge">Spain · Motor Insurance · 105 K policies</span>
+    <div style="flex-basis: 100%; height: 0;"></div>
     <span class="badge">10 weeks · 5 000 profiles/week</span>
-    <span class="badge">Null result</span>
     <span class="badge">Lledó &amp; Pavía (2024)</span>
+    <span class="badge">Active Learning</span>
+    <span class="badge">Cube Method</span>
+    <span class="badge">Simple Random Sampling</span>
+    <div style="flex-basis: 100%; height: 0;"></div>
+    <span class="badge">Null result</span>
   </div>
 </header>
 
@@ -209,15 +228,14 @@
   <section>
     <h2>The problem</h2>
     <p>
-      Insurers selling on aggregator platforms like
-      <a href="https://www.comparis.ch" target="_blank" rel="noopener">comparis.ch</a>
-      can observe competitor quotes in real time. By systematically submitting policy
+      Insurers selling on aggregator platforms can observe competitor quotes in real time. By systematically submitting policy
       profiles and recording the returned premiums, they can train a
       <strong>competitor model</strong> — a replica of the competitor's pricing engine.
     </p>
     <p>
       In practice, scraping budgets are limited: every profile query costs time and risks
-      detection. The question is not <em>whether</em> to scrape, but <em>which profiles</em>
+      detection — unless a data-sharing or scraping agreement with the aggregator is in place.
+      The question is not <em>whether</em> to scrape, but <em>which profiles</em>
       to query next to learn the tariff structure as efficiently as possible.
       This is an active learning problem.
     </p>
@@ -226,7 +244,7 @@
     <p>
       The dataset used in this project — <a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a> —
       represents a <em>company</em> portfolio: the policies actually held by one insurer.
-      This is not the same as what the company observes on an aggregator.
+      This is not the same as the full quote traffic an insurer receives via the aggregator — all profiles for which a premium is requested, regardless of whether they convert.
     </p>
     <p>
       On a price comparison platform, a user submits a profile and every participating insurer
@@ -241,8 +259,9 @@
       A preparation step constructs a <em>market portfolio</em> from the company portfolio by
       supplementing under-represented segments via <code>create_market_supplement()</code>.
       The <code>market_supplement_ratio</code> parameter (default 10%) controls the supplement
-      fraction. The warm start and the <code>random_market</code> / <code>informed_market</code>
-      strategies draw from this corrected pool — training on a distribution that more closely
+      fraction. The warm start and all AL strategies draw anchors from this corrected pool —
+      <code>random_market</code>, <code>informed_market</code>, <code>cube_market</code>, and
+      the CP and Gaussian families alike — training on a distribution that more closely
       reflects real aggregator traffic. This is the structural reason the market strategies
       outperform CP and Gaussian strategies.
     </div>
@@ -258,14 +277,14 @@
     </div>
 
     <div class="callout insight">
-      <strong>Core research questions.</strong>
-      (1) Does an active learning query strategy rediscover systematic ceteris paribus
-      profiling on its own — varying one factor at a time while holding all others fixed?
-      (2) Do Gaussian joint perturbations — varying <em>all</em> features simultaneously
-      around an anchor — outperform CP sweeps by exposing LightGBM to genuine multivariate
-      variation within each anchor's batch?
-      (3) Can a best-of-both-worlds hybrid — applying an informativeness filter within a
-      representative pool — outperform pure random market scraping?
+      <strong>Core research questions.</strong> This project addresses four questions at the
+      intersection of active learning and survey sampling theory:
+      <ol style="margin: 10px 0 0 20px;">
+        <li>Does an active learning query strategy rediscover systematic ceteris paribus profiling on its own — varying one factor at a time while holding all others fixed?</li>
+        <li>Do Gaussian joint perturbations — varying <em>all</em> features simultaneously around an anchor — outperform CP sweeps by exposing LightGBM to genuine multivariate variation within each anchor's batch?</li>
+        <li>Can a best-of-both-worlds hybrid — applying an informativeness filter within a representative pool — outperform pure random market scraping?</li>
+        <li>Does balanced sampling via the cube method (Tillé &amp; Deville, 2004) improve on simple random market scraping — and how close is simple random sampling (SRS) to the theoretical optimum?</li>
+      </ol>
     </div>
   </section>
 
@@ -297,11 +316,13 @@
 
     <h3>Phase 1 — Oracle</h3>
     <p>
-      A LightGBM model is trained on <code>Premium ~ features</code> using all
-      renewal rows from the
-      <a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a>
-      motor insurance dataset (105,555 rows, 53,502 unique policies). This becomes the
-      <strong>oracle</strong>: given any policy profile, it returns a simulated
+      A LightGBM model is trained on <code>Premium ~ features</code> using all rows
+      from the <a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a>
+      motor insurance dataset (105,555 policy-year observations across 53,502 unique policies),
+      excluding current-year claim outcomes (<code>Cost_claims_year</code>, <code>N_claims_year</code>),
+      which are not observable at quote time, and claim history features (<code>N_claims_history</code>,
+      <code>R_Claims_history</code>), which are set to zero on aggregators as a standardised input.
+      This becomes the <strong>oracle</strong>: given any policy profile, it returns a simulated
       competitor quote.
     </p>
     <p>
@@ -334,25 +355,36 @@
       The competitor model is seeded with a <strong>warm start</strong> of
       <code>warmup_weeks × weekly_budget</code> rows (default: 1 × 5,000 = 5,000),
       simulating organic quote requests arriving via the aggregator before the systematic
-      AL loop begins. Composition mirrors <code>random_market</code>: real portfolio rows
+      scraping loop begins. Composition mirrors <code>random_market</code>: real portfolio rows
       topped up with a synthetic supplement. A <code>warmup_scale</code> oversampling factor
       (default 1.2) guarantees exact counts after constraint validation dropout.
     </p>
     <p>
-      The loop then runs <strong>weekly</strong>. Two profile generators are compared:
+      The loop then runs <strong>weekly</strong>. Three families of strategies are compared:
     </p>
     <ul style="margin: 0 0 14px 20px;">
-      <li><strong>Ceteris-paribus (CP):</strong> each continuous feature is swept one at a time across its full range, all other features held fixed. 254 profiles per anchor. Mirrors standard scraping practice.</li>
+      <li><strong>Ceteris-paribus (CP):</strong> each continuous feature is swept one at a time across its full range, all other features held fixed. 254 profiles per anchor.</li>
       <li><strong>Gaussian perturbations:</strong> all continuous features are perturbed <em>simultaneously</em> with independent Gaussian noise. Same 254-profile budget. Tests whether joint variation enables faster interaction learning.</li>
+      <li><strong>Market sampling</strong> (<code>random_market</code>, <code>informed_market</code>, <code>cube_market</code>): draws real rows directly from the market-corrected pool, preserving natural feature correlations. No synthetic profile generation.</li>
     </ul>
     <p>
-      Each week, a pool of <code>n_anchors_base × anchor_space_multiplier</code> candidates
-      is scored, the top <code>selection_fraction</code> are profiled, and the resulting
-      profiles are trimmed to the weekly budget from the top-ranked anchors first — so the
-      highest-scoring anchors always contribute before lower-ranked ones are cut. Budget
-      converts to base anchors as <code>n_anchors_base = 5 000 ÷ 254 ≈ 19</code>; with
-      defaults <code>anchor_space_multiplier = 30</code> and <code>selection_fraction = 10%</code>
+      For CP and Gaussian strategies, anchor selection works as follows: each week, a pool
+      of <code>n_anchors_base × anchor_space_multiplier</code> candidates is scored, the top
+      <code>selection_fraction</code> are profiled, and the resulting profiles are trimmed to
+      the weekly budget from the top-ranked anchors first — so the highest-scoring anchors
+      always contribute before lower-ranked ones are cut. Budget converts to base anchors as
+      <code>n_anchors_base = 5 000 ÷ 254 ≈ 19</code>; with defaults
+      <code>anchor_space_multiplier = 30</code> and <code>selection_fraction = 10%</code>
       this means 570 candidates scored → 57 anchors profiled → 5 000 profiles labeled.
+    </p>
+    <p>
+      For market sampling strategies, no anchor profiling is involved.
+      <code>random_market</code> draws rows directly from the market-corrected pool.
+      <code>informed_market</code> draws a large representative pool and selects the top
+      <code>weekly_budget</code> rows by expected prediction error.
+      <code>cube_market</code> builds a pool of 3× the weekly budget and applies the
+      Tillé-Deville cube method to select a sample whose covariate means exactly match
+      the population — balance by construction rather than in expectation.
     </p>
 
     <div class="table-wrap">
@@ -362,7 +394,7 @@
         </thead>
         <tbody>
           <tr><td>Random</td><td><code>_cp</code> · <code>_gauss</code></td><td>Uniform random anchor selection — no model required</td></tr>
-          <tr><td>Random market</td><td>—</td><td>90% real portfolio rows + 10% synthetic supplement (CP or Gaussian) from random anchors; models portfolio coverage gap in aggregator traffic</td></tr>
+          <tr><td>Random market</td><td>—</td><td>Uniform random selection from the market-corrected pool — no scoring required</td></tr>
           <tr><td>Informed market</td><td>—</td><td>Error-based scoring on a large representative pool (same market composition as random market); selects top <code>weekly_budget</code> rows — best-of-both-worlds hybrid</td></tr>
           <tr><td>Cube method</td><td>—</td><td>Tillé-Deville balanced sampling on a pool 3× the weekly budget: selects profiles such that sample means of all continuous features equal the population means by construction, not just in expectation</td></tr>
           <tr><td>Uncertainty</td><td><code>_cp</code> · <code>_gauss</code></td><td>Anchors with highest bootstrap prediction variance across ensemble members</td></tr>
@@ -421,9 +453,9 @@
       multi-wave shocks. Adding a new scenario requires no code changes.
     </p>
     <p>
-      This lets practitioners answer a critical operational question: is the weekly
-      continuous scraping rate sufficient to track a tariff change, or does the model
-      need a full restart with a fresh bulk scrape?
+      Simulating tariff injections lets practitioners also answer a critical operational
+      question: is the weekly continuous scraping rate sufficient to track a tariff change,
+      or does the model need a full restart with a fresh bulk scrape?
     </p>
   </section>
 
@@ -478,9 +510,8 @@
 
     <div class="callout">
       <strong>Known limitation.</strong> Claim history (<code>N_claims_history</code>,
-      <code>R_Claims_history</code>) is excluded from the oracle. In practice, scraping
-      is performed with claim history set to 0 on aggregators, so this matches real-world
-      scraping behaviour — but it means bonus-malus effects are not captured.
+      <code>R_Claims_history</code>) is excluded from the oracle as a simplification.
+      On aggregators, claim history can be self-declared.
     </div>
 
   </section>
@@ -508,7 +539,7 @@
     <h3>Global convergence</h3>
 
     <div class="callout result">
-      <strong>Random market outperforms all strategies — including the hybrid.</strong>
+      <strong>Random market outperforms all anchor-based strategies — including the hybrid. Even the cube method, which achieves exact covariate balance by construction, is only marginally better in some settings.</strong>
       Labeling real portfolio rows produces training data with natural feature correlations
       across all variables simultaneously. LightGBM learns interaction effects far more
       efficiently from genuine multivariate profiles than from any synthetic alternative.
@@ -516,8 +547,8 @@
     </div>
 
     <div class="callout insight">
-      <strong>Why: CP profiles are structurally limited.</strong> A CP profile sweeping
-      driver age from 18 to 80 holds Power, vehicle age, and every other feature at a single
+      <strong>Why: CP profiles are structurally limited.</strong> For example, a CP profile sweeping
+      driver age from 18 to 80 holds <code>Power</code>, vehicle age, and every other feature at a single
       anchor value. The resulting training data covers marginal tariff curves well but
       systematically under-represents the multivariate interactions that drive pricing
       variation. Real observed quotes have no such constraint — they carry the full joint
@@ -556,9 +587,11 @@
       the real data distribution, which naturally matches a population-representative holdout.
       When the scoring pool is made representative first (informed market), the informativeness
       filter still introduces enough variance in anchor selection to hurt mainstream coverage.
+      Random sampling from a representative pool is already near-optimal: any selection
+      filter layered on top can only introduce bias.
     </p>
 
-    <h3>Tariff change: restart is not always optimal</h3>
+    <h3>Tariff change: continuous scraping outperforms restart</h3>
     <p>
       After a targeted tariff change (e.g. young-driver surcharge +20%), a full restart
       discards all accumulated labels — including valid ones from unchanged segments. The
@@ -623,6 +656,16 @@
       </table>
     </div>
 
+    <p>
+      Neyman allocation was not implemented as a standalone strategy because it is already
+      approximated by the informativeness-based strategies in this study
+      (<code>segment_adaptive_cp</code>, <code>error_based_cp</code>). The cube method was
+      chosen as the survey-sampling complement because it only requires observable auxiliary
+      variables. Neyman allocation could in principle be implemented by estimating stratum
+      variances from the labeled set — but this is already what <code>segment_adaptive_cp</code>
+      approximates.
+    </p>
+
     <div class="callout result">
       <strong>Cube method result: SRS is near the theoretical ceiling.</strong>
       <code>cube_market</code> (Tillé &amp; Deville, 2004) removes all random deviation from
@@ -649,7 +692,7 @@
           </tr>
           <tr>
             <td><a href="https://market-model-al.streamlit.app/" target="_blank" rel="noopener">Streamlit dashboard</a></td>
-            <td>Interactive exploration of all 12 strategies, segment RMSE, SHAP cosine similarity, and tariff change simulations</td>
+            <td>Interactive exploration of all 13 strategies, segment RMSE, SHAP cosine similarity, and tariff change simulations</td>
           </tr>
           <tr>
             <td><a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a></td>
