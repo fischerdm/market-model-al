@@ -4,8 +4,6 @@ This project simulates the process of scraping competitor quotes from aggregator
 
 Thirteen strategies were designed to reverse-engineer a competitor tariff from synthetic aggregator quotes, mimicking the weekly scraping and retraining loop in practice: each week, a batch of policy profiles is submitted to the simulated aggregator, the returned quotes label the training set, and the competitor model is retrained. None of the strategies outperformed random sampling. Even the cube method, which achieves exact covariate balance by construction, is only marginally better in some settings.
 
-All findings are specific to a **gradient boosting oracle**. Whether representativeness retains its advantage over informativeness under simpler, more separable tariff structures is an open question — GLM or GAM-based pricing engines (the traditional standard in non-life insurance) represent a particularly compelling comparison point, since ceteris-paribus profiling was originally motivated by the multiplicative structure of such models. Actuaries are encouraged to adapt this codebase to their own data and pricing engine.
-
 ## Concept
 
 An insurer can train a competitor model by scraping quoted premiums from aggregator platforms. This project simulates that iterative process in a controlled synthetic environment where the ground truth is known.
@@ -106,6 +104,10 @@ The central finding — that `random_market` beats every informativeness-based A
 | Balanced sampling (cube method) | `cube_market` — implemented; `cube_market` is sometimes marginally better than `random_market`, confirming SRS is already near the theoretical ceiling |
 
 `random_market` wins because representativeness is the dominant factor. `cube_market` (Tillé & Deville, 2004) delivers exact covariate balance by construction — a strictly stronger property than SRS — yet the gain over `random_market` is only marginal. This confirms that SRS is robust: random deviation from the population mean at n=5,000 profiles/week is already small enough that eliminating it entirely provides little additional benefit.
+
+## Open questions
+
+All findings are specific to a **gradient boosting oracle**. Whether representativeness retains its advantage over informativeness under simpler, more separable tariff structures is an open question — GLM or GAM-based pricing engines (the traditional standard in non-life insurance) represent a particularly compelling comparison point, since ceteris-paribus profiling was originally motivated by the multiplicative structure of such models. Actuaries are encouraged to adapt this codebase to their own data and pricing engine.
 
 ## Project structure
 
