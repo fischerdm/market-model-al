@@ -1,8 +1,10 @@
-# When Random Wins: Active Learning for Competitor Pricing Intelligence
+# When Random Wins: Active Learning for Competitor Pricing Intelligence with a Gradient Boosting Oracle
 
 This project simulates the process of scraping competitor quotes from aggregator websites to build and continuously retrain a **competitor model** — a replica of a competitor's pricing engine in non-life insurance.
 
 Thirteen strategies were designed to reverse-engineer a competitor tariff from synthetic aggregator quotes, mimicking the weekly scraping and retraining loop in practice: each week, a batch of policy profiles is submitted to the simulated aggregator, the returned quotes label the training set, and the competitor model is retrained. None of the strategies outperformed random sampling. Even the cube method, which achieves exact covariate balance by construction, is only marginally better in some settings.
+
+All findings are specific to a **gradient boosting oracle**. Whether representativeness retains its advantage over informativeness under simpler, more separable tariff structures is an open question — GLM or GAM-based pricing engines (the traditional standard in non-life insurance) represent a particularly compelling comparison point, since ceteris-paribus profiling was originally motivated by the multiplicative structure of such models. Actuaries are encouraged to adapt this codebase to their own data and pricing engine.
 
 ## Concept
 
