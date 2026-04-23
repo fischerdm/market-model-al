@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B.svg)](https://streamlit.io)
+[![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B.svg)](https://market-model-al.streamlit.app/)
 [![Data DOI](https://img.shields.io/badge/Data-10.17632%2F5cxyb5fp4f.2-orange.svg)](https://doi.org/10.17632/5cxyb5fp4f.2)
 
 This project simulates the process of scraping competitor quotes from aggregator websites to build and continuously retrain a **competitor model** — a replica of a competitor's pricing engine in non-life insurance.
