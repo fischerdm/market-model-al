@@ -1,10 +1,10 @@
 # When Random Wins: Active Learning for Competitor Pricing Intelligence with a Gradient Boosting Oracle
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B.svg)](https://market-model-al.streamlit.app/)
 [![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/fischerdm/market-model-al/releases)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B.svg)](https://market-model-al.streamlit.app/)
 [![Data DOI](https://img.shields.io/badge/Data-10.17632%2F5cxyb5fp4f.2-orange.svg)](https://doi.org/10.17632/5cxyb5fp4f.2)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 This project simulates the process of scraping competitor quotes from aggregator websites to build and continuously retrain a **competitor model** — a replica of a competitor's pricing engine in non-life insurance.
 
