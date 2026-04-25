@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>When Random Wins: Active Learning for Competitor Pricing Intelligence</title>
+  <title>When Random Wins: Active Learning for Competitor Pricing Intelligence with a Gradient Boosting Oracle</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -201,14 +201,14 @@
 <body>
 
 <header>
-  <h1>When Random Wins: Active Learning<br>for Competitor Pricing Intelligence</h1>
+  <h1>When Random Wins: Active Learning<br>for Competitor Pricing Intelligence<br>with a Gradient Boosting Oracle</h1>
 
-  <p class="subtitle">Thirteen strategies were designed to reverse-engineer a competitor's
+  <p class="subtitle">Seventeen strategies were designed to reverse-engineer a competitor's
     insurance tariff from aggregator quotes. None outperformed random sampling.</p>
   <p class="byline">David Fischer · April 2026</p>
   <div class="badge-row">
     <span class="badge">Python 3.12 · LightGBM · SHAP</span>
-    <span class="badge">13 strategies</span>
+    <span class="badge">17 strategies</span>
     <span class="badge">Streamlit Dashboard</span>
     <span class="badge">Spain · Motor Insurance · 105 K policies</span>
     <div style="flex-basis: 100%; height: 0;"></div>
@@ -216,6 +216,7 @@
     <span class="badge">Lledó &amp; Pavía (2024)</span>
     <span class="badge">Active Learning</span>
     <span class="badge">Cube Method</span>
+    <span class="badge"><a href="https://github.com/fischerdm/market-model-al/blob/main/LICENSE" style="color:inherit;text-decoration:none;">MIT License</a></span>
     <span class="badge">Simple Random Sampling</span>
     <div style="flex-basis: 100%; height: 0;"></div>
     <span class="badge">Null result</span>
@@ -521,7 +522,7 @@
     <h2>Active learning results</h2>
 
     <p>
-      Simulation run: <strong>10 weeks · 5 000 profiles/week · 13 strategies</strong>
+      Simulation run: <strong>10 weeks · 5 000 profiles/week · 17 strategies</strong>
       (5 CP variants, 5 Gaussian variants, random market, informed market, cube method).
       Each week, 570 candidate anchors are scored, the top 10% (57) are profiled,
       and profiles are sampled to the weekly budget of 5 000.
@@ -677,6 +678,20 @@
     </div>
   </section>
 
+  <!-- ── OPEN QUESTIONS ── -->
+  <section>
+    <h2>Open questions</h2>
+    <p>
+      All findings are specific to a <strong>gradient boosting oracle</strong>. Whether
+      representativeness retains its advantage over informativeness under simpler, more
+      separable tariff structures is an open question — GLM or GAM-based pricing engines
+      (the traditional standard in non-life insurance) represent a particularly compelling
+      comparison point, since ceteris-paribus profiling was originally motivated by the
+      multiplicative structure of such models. Actuaries are encouraged to adapt this
+      codebase to their own data and pricing engine.
+    </p>
+  </section>
+
   <!-- ── REPO ── -->
   <section>
     <h2>Explore the project</h2>
@@ -692,7 +707,7 @@
           </tr>
           <tr>
             <td><a href="https://market-model-al.streamlit.app/" target="_blank" rel="noopener">Streamlit dashboard</a></td>
-            <td>Interactive exploration of all 13 strategies, segment RMSE, SHAP cosine similarity, and tariff change simulations</td>
+            <td>Interactive exploration of all 17 strategies, segment RMSE, SHAP cosine similarity, and tariff change simulations</td>
           </tr>
           <tr>
             <td><a href="https://doi.org/10.17632/5cxyb5fp4f.2" target="_blank" rel="noopener">Lledó &amp; Pavía (2024)</a></td>

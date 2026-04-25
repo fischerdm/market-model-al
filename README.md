@@ -1,8 +1,14 @@
-# When Random Wins: Active Learning for Competitor Pricing Intelligence
+# When Random Wins: Active Learning for Competitor Pricing Intelligence with a Gradient Boosting Oracle
+
+[![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B.svg)](https://market-model-al.streamlit.app/)
+[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/fischerdm/market-model-al/releases)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![Data DOI](https://img.shields.io/badge/Data-10.17632%2F5cxyb5fp4f.2-orange.svg)](https://doi.org/10.17632/5cxyb5fp4f.2)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 This project simulates the process of scraping competitor quotes from aggregator websites to build and continuously retrain a **competitor model** — a replica of a competitor's pricing engine in non-life insurance.
 
-Thirteen strategies were designed to reverse-engineer a competitor tariff from synthetic aggregator quotes, mimicking the weekly scraping and retraining loop in practice: each week, a batch of policy profiles is submitted to the simulated aggregator, the returned quotes label the training set, and the competitor model is retrained. None of the strategies outperformed random sampling. Even the cube method, which achieves exact covariate balance by construction, is only marginally better in some settings.
+Seventeen strategies were designed to reverse-engineer a competitor tariff from synthetic aggregator quotes, mimicking the weekly scraping and retraining loop in practice: each week, a batch of policy profiles is submitted to the simulated aggregator, the returned quotes label the training set, and the competitor model is retrained. None of the strategies outperformed random sampling. Even the cube method, which achieves exact covariate balance by construction, is only marginally better in some settings.
 
 ## Concept
 
@@ -104,6 +110,10 @@ The central finding — that `random_market` beats every informativeness-based A
 | Balanced sampling (cube method) | `cube_market` — implemented; `cube_market` is sometimes marginally better than `random_market`, confirming SRS is already near the theoretical ceiling |
 
 `random_market` wins because representativeness is the dominant factor. `cube_market` (Tillé & Deville, 2004) delivers exact covariate balance by construction — a strictly stronger property than SRS — yet the gain over `random_market` is only marginal. This confirms that SRS is robust: random deviation from the population mean at n=5,000 profiles/week is already small enough that eliminating it entirely provides little additional benefit.
+
+## Open questions
+
+All findings are specific to a **gradient boosting oracle**. Whether representativeness retains its advantage over informativeness under simpler, more separable tariff structures is an open question — GLM or GAM-based pricing engines (the traditional standard in non-life insurance) represent a particularly compelling comparison point, since ceteris-paribus profiling was originally motivated by the multiplicative structure of such models. Actuaries are encouraged to adapt this codebase to their own data and pricing engine.
 
 ## Project structure
 
