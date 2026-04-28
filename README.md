@@ -2,6 +2,8 @@
 
 > Seventeen strategies were designed to reverse-engineer an insurance tariff from aggregator quotes using a Gradient Boosting Oracle. None outperformed random sampling.
 
+&nbsp;
+
 [![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B.svg)](https://market-model-al.streamlit.app/)
 [![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/fischerdm/market-model-al/releases)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
