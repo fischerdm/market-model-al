@@ -205,4 +205,4 @@ Download the dataset from [Mendeley Data — doi: 10.17632/5cxyb5fp4f.2](https:/
 
 ## Acknowledgments
 
-This study implements the **Cube Method** (Tillé and Deville, 2004), a concept I first encountered in his lectures almost a decade ago. Special thanks to him.
+This study implements the **Cube Method** (Tillé and Deville, 2004), a concept I first encountered in Tillé's lectures almost a decade ago.
