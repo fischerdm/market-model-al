@@ -1,4 +1,8 @@
-# When Random Wins: Active Learning for Competitor Pricing Intelligence with a Gradient Boosting Oracle
+# When Random Wins: A Simulation Study on Reverse-Engineering a Competitor Tariff
+
+> Seventeen strategies were designed to reverse-engineer an insurance tariff from aggregator quotes using a Gradient Boosting Oracle. None outperformed random sampling.
+
+&nbsp;
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B.svg)](https://market-model-al.streamlit.app/)
 [![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/fischerdm/market-model-al/releases)
@@ -198,3 +202,7 @@ streamlit run app.py
 ## Data
 
 Download the dataset from [Mendeley Data — doi: 10.17632/5cxyb5fp4f.2](https://doi.org/10.17632/5cxyb5fp4f.2) and place the file(s) in `data/raw/`.
+
+## Acknowledgments
+
+This study implements the **Cube Method** (Tillé and Deville, 2004), a concept I first encountered in Tillé's lectures almost a decade ago.
