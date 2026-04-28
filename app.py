@@ -342,7 +342,7 @@ st.set_page_config(
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.title("Active Learning Strategy Evaluator")
+    st.title("Sampling Strategy Evaluator")
     st.markdown(
         "<p style='font-size:0.95rem; color: grey;'>"
         "An insurer scraping competitor quotes from an aggregator faces a classic active learning dilemma: "
