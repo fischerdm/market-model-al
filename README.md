@@ -202,3 +202,7 @@ streamlit run app.py
 ## Data
 
 Download the dataset from [Mendeley Data — doi: 10.17632/5cxyb5fp4f.2](https://doi.org/10.17632/5cxyb5fp4f.2) and place the file(s) in `data/raw/`.
+
+## Acknowledgments
+
+This study implements the **Cube Method** (Tillé and Deville, 2004), a concept I first encountered in his lectures almost a decade ago. Special thanks to him.
