@@ -103,8 +103,6 @@ The central tension is the **exploration-exploitation tradeoff**: informativenes
 | **Continuous scraping outperforms restart** | After a targeted tariff change, a full restart discards valid labels from unchanged segments. Continuous scraping can win on global RMSE at week 10. |
 | **Disruption-adaptive** | Uses the week-on-week *change* in segment RMSE as a signal, not the absolute level. Fires on disruption, reverts to random once the gap closes, discards no labels. |
 
-> The oracle is a LightGBM model fit on a real portfolio — not a closed-form formula — so its predictions carry noise. This may partly explain why AL strategies underperform: their informativeness signals (prediction error, uncertainty) are themselves noisy, causing them to chase artefacts rather than real structure. SRS, by ignoring these signals entirely, is immune to this effect. The observed RMSE spike followed by recovery after simulated tariff changes provides some internal validation that the loop is tracking genuine structure — but the oracle's noise remains a confound that a closed-form tariff would eliminate.
-
 ## Survey sampling perspective
 
 The central finding — that `random_market` beats every informativeness-based AL strategy — can be reframed through survey sampling theory. The problem is fundamentally about **estimating a finite population (the tariff surface) from a limited budget**, a problem survey sampling has optimised for decades.
@@ -116,6 +114,16 @@ The central finding — that `random_market` beats every informativeness-based A
 | Balanced sampling (cube method) | `cube_market` — implemented; `cube_market` is sometimes marginally better than `random_market`, confirming SRS is already near the theoretical ceiling |
 
 `random_market` wins because representativeness is the dominant factor. `cube_market` (Tillé & Deville, 2004) delivers exact covariate balance by construction — a strictly stronger property than SRS — yet the gain over `random_market` is only marginal. This confirms that SRS is robust: random deviation from the population mean at n=5,000 profiles/week is already small enough that eliminating it entirely provides little additional benefit.
+
+## Credibility of the results
+
+The oracle is a LightGBM model fit on a real portfolio — not a closed-form formula — so its predictions carry noise. This may partly explain why AL strategies underperform: their informativeness signals (prediction error, uncertainty) are themselves noisy, causing them to chase artefacts rather than real structure. SRS, by ignoring these signals entirely, is immune to this effect. The oracle's noise therefore remains a confound that a closed-form tariff would eliminate.
+
+Three observations speak against this being a fatal flaw:
+
+- The SHAP dependence plots show actuarially sensible curves (driver age U-shape, vehicle power effects) — the oracle learned structure, not noise
+- The tariff-change recovery curves behave as expected: RMSE spikes on the change week, then drops — flat or random curves would indicate noise-fitting
+- LightGBM on 105k rows is a strong fit; oracle variance is low even if it's not a closed-form tariff
 
 ## Open questions
 
