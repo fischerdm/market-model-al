@@ -18,7 +18,7 @@ Seventeen strategies were designed to reverse-engineer a competitor tariff from 
 
 An insurer can train a competitor model by scraping quoted premiums from aggregator platforms. This project simulates that iterative process in a controlled synthetic environment where the ground truth is known.
 
-The real dataset is treated as the competitor's actual tariff. A LightGBM oracle learns that tariff and can return a premium for any policy profile — simulating the function of an aggregator. The AL loop then tests how efficiently a competitor model can recover the oracle from a limited scraping budget.
+The real dataset is treated as the competitor's actual tariff. A LightGBM oracle learns that tariff and can return a premium for any policy profile — simulating the function of an aggregator. The **Active Learning (AL) loop** then tests how efficiently a competitor model can recover the oracle from a limited scraping budget: each week, a strategy selects which profiles to query, the oracle labels them, and the competitor model is retrained.
 
 The end deliverable is a **Streamlit dashboard** for interactively exploring and comparing AL query strategies.
 
