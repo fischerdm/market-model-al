@@ -103,6 +103,8 @@ The central tension is the **exploration-exploitation tradeoff**: informativenes
 | **Continuous scraping outperforms restart** | After a targeted tariff change, a full restart discards valid labels from unchanged segments. Continuous scraping can win on global RMSE at week 10. |
 | **Disruption-adaptive** | Uses the week-on-week *change* in segment RMSE as a signal, not the absolute level. Fires on disruption, reverts to random once the gap closes, discards no labels. |
 
+> The oracle is a LightGBM model fit on a real portfolio — not a closed-form formula — so its predictions carry noise. This may partly explain why AL strategies underperform: their informativeness signals (prediction error, uncertainty) are themselves noisy, causing them to chase artefacts rather than real structure. SRS, by ignoring these signals entirely, is immune to this effect. The observed RMSE spike followed by recovery after simulated tariff changes provides some internal validation that the loop is tracking genuine structure — but the oracle's noise remains a confound that a closed-form tariff would eliminate.
+
 ## Survey sampling perspective
 
 The central finding — that `random_market` beats every informativeness-based AL strategy — can be reframed through survey sampling theory. The problem is fundamentally about **estimating a finite population (the tariff surface) from a limited budget**, a problem survey sampling has optimised for decades.
