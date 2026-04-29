@@ -237,7 +237,9 @@
       detection — unless a data-sharing or scraping agreement with the aggregator is in place.
       The question is not <em>whether</em> to scrape, but <em>which profiles</em>
       to query next to learn the tariff structure as efficiently as possible.
-      This is an active learning problem.
+      This is an <strong>Active Learning (AL)</strong> problem: each week, a strategy
+      selects which profiles to query, the oracle labels them with a simulated quote,
+      and the competitor model is retrained.
     </p>
 
     <h3>Company portfolio vs. market portfolio</h3>
@@ -675,6 +677,20 @@
       market distribution is already small enough to matter little. <code>random_market</code>
       is not just simple — it is essentially optimal among representativeness-based strategies.
     </div>
+  </section>
+
+  <!-- ── CREDIBILITY ── -->
+  <section>
+    <h2>Credibility of the results</h2>
+    <div class="callout warn">
+      The oracle is a LightGBM model fit on a real portfolio — not a closed-form formula — so its predictions carry noise. This may partly explain why AL strategies underperform: their informativeness signals (prediction error, uncertainty) are themselves noisy, causing them to chase artefacts rather than real structure. SRS, by ignoring these signals entirely, is immune to this effect. The oracle's noise therefore remains a confound that a closed-form tariff would eliminate.
+    </div>
+    <p>Three observations speak against this being a fatal flaw:</p>
+    <ul style="margin: 0 0 14px 20px;">
+      <li>The SHAP dependence plots show actuarially sensible curves (driver age U-shape, vehicle power effects) — the oracle learned structure, not noise.</li>
+      <li>The tariff-change recovery curves behave as expected: RMSE spikes on the change week, then drops — flat or random curves would indicate noise-fitting.</li>
+      <li>LightGBM on 105k rows is a strong fit; oracle variance is low even if it's not a closed-form tariff.</li>
+    </ul>
   </section>
 
   <!-- ── OPEN QUESTIONS ── -->

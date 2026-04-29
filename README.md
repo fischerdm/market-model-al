@@ -18,7 +18,7 @@ Seventeen strategies were designed to reverse-engineer a competitor tariff from 
 
 An insurer can train a competitor model by scraping quoted premiums from aggregator platforms. This project simulates that iterative process in a controlled synthetic environment where the ground truth is known.
 
-The real dataset is treated as the competitor's actual tariff. A LightGBM oracle learns that tariff and can return a premium for any policy profile — simulating the function of an aggregator. The AL loop then tests how efficiently a competitor model can recover the oracle from a limited scraping budget.
+The real dataset is treated as the competitor's actual tariff. A LightGBM oracle learns that tariff and can return a premium for any policy profile — simulating the function of an aggregator. The **Active Learning (AL) loop** then tests how efficiently a competitor model can recover the oracle from a limited scraping budget: each week, a strategy selects which profiles to query, the oracle labels them, and the competitor model is retrained.
 
 The end deliverable is a **Streamlit dashboard** for interactively exploring and comparing AL query strategies.
 
@@ -114,6 +114,16 @@ The central finding — that `random_market` beats every informativeness-based A
 | Balanced sampling (cube method) | `cube_market` — implemented; `cube_market` is sometimes marginally better than `random_market`, confirming SRS is already near the theoretical ceiling |
 
 `random_market` wins because representativeness is the dominant factor. `cube_market` (Tillé & Deville, 2004) delivers exact covariate balance by construction — a strictly stronger property than SRS — yet the gain over `random_market` is only marginal. This confirms that SRS is robust: random deviation from the population mean at n=5,000 profiles/week is already small enough that eliminating it entirely provides little additional benefit.
+
+## Credibility of the results
+
+The oracle is a LightGBM model fit on a real portfolio — not a closed-form formula — so its predictions carry noise. This may partly explain why AL strategies underperform: their informativeness signals (prediction error, uncertainty) are themselves noisy, causing them to chase artefacts rather than real structure. SRS, by ignoring these signals entirely, is immune to this effect. The oracle's noise therefore remains a confound that a closed-form tariff would eliminate.
+
+Three observations speak against this being a fatal flaw:
+
+- The SHAP dependence plots show actuarially sensible curves (driver age U-shape, vehicle power effects) — the oracle learned structure, not noise
+- The tariff-change recovery curves behave as expected: RMSE spikes on the change week, then drops — flat or random curves would indicate noise-fitting
+- LightGBM on 105k rows is a strong fit; oracle variance is low even if it's not a closed-form tariff
 
 ## Open questions
 
