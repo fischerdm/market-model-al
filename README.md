@@ -236,7 +236,30 @@ class MyGLMTariff(BaseOracle):
         return base * age_factor * power_factor
 ```
 
-Pass your oracle to `ALSimulation` in place of `OraclePricingEngine`. For a GBM tariff, `OraclePricingEngine` already handles that case — just point it to your own model file.
+**LightGBM pickle** — no subclassing needed. `OraclePricingEngine` already does `joblib.load()` + `.predict()` with the categorical dtype preparation LightGBM expects. Just point it at your file:
+
+```python
+engine = OraclePricingEngine("path/to/your_model.pkl")
+```
+
+**Other GBM framework** (XGBoost, sklearn, etc.) — a thin subclass, since those models don't need categorical dtype casting:
+
+```python
+import joblib
+from market_model_al.base_oracle import BaseOracle
+
+class MyGBMOracle(BaseOracle):
+    def __init__(self, model_path):
+        self._model = joblib.load(model_path)
+
+    def query(self, profiles):
+        mask = self.validate(profiles)
+        if not mask.all():
+            raise ValueError(f"{(~mask).sum()} profile(s) failed validation.")
+        return self._model.predict(profiles)
+```
+
+Pass your oracle to `ALSimulation` in place of `OraclePricingEngine`. The real work is always steps 2 and 3: matching your feature names in `features.yaml` and adapting `engineer_features()` in `features.py`.
 
 **2. Update `config/features.yaml`**
 

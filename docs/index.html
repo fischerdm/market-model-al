@@ -724,10 +724,17 @@
     </p>
     <div class="callout insight">
       <strong>1. Subclass <code>BaseOracle</code> and implement <code>query()</code>.</strong>
-      The interface is one method: <code>query(profiles) → np.ndarray</code>. A multiplicative
-      GLM tariff is a few lines of factor arithmetic; a GBM loads a model file.
-      <code>OraclePricingEngine</code> already handles the LightGBM case — just point it
-      to your own <code>.pkl</code>. See <code>base_oracle.py</code> for a worked example.
+      The interface is one method: <code>query(profiles) → np.ndarray</code>. Three common cases:
+      <ul style="margin: 10px 0 0 20px;">
+        <li><strong>LightGBM pickle</strong> — no subclassing needed. <code>OraclePricingEngine</code>
+          already does <code>joblib.load()</code> + <code>.predict()</code> with the categorical dtype
+          preparation LightGBM expects. Just point it at your file.</li>
+        <li><strong>Other GBM framework</strong> (XGBoost, sklearn, etc.) — a five-line subclass:
+          load the pickle in <code>__init__</code>, call <code>self.validate()</code> then
+          <code>self._model.predict(profiles)</code> in <code>query()</code>.</li>
+        <li><strong>Multiplicative GLM</strong> — implement <code>query()</code> as factor arithmetic
+          directly. See <code>base_oracle.py</code> for a worked example.</li>
+      </ul>
     </div>
     <div class="callout insight">
       <strong>2. Update <code>config/features.yaml</code>.</strong>
