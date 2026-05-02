@@ -8,6 +8,8 @@ at quote time (claim outcomes, raw dates, administrative lapse info).
 
 import pandas as pd
 
+from market_model_al.features_config import CAT_FEATURES, CAT_FEATURES_OBJ  # noqa: F401
+
 # Claim outcomes and admin columns not available at quote time
 _DROP_COLS = [
     "Date_start_contract", "Date_next_renewal",
@@ -15,14 +17,6 @@ _DROP_COLS = [
     "Lapse",
     "Cost_claims_year", "N_claims_year", "N_claims_history", "R_Claims_history",
 ]
-
-# Integer-coded columns that are categorical in nature
-CAT_FEATURES = [
-    "Distribution_channel", "Payment", "Type_risk", "Area",
-    "Second_driver", "N_doors",
-]
-# Type_fuel is object dtype and also categorical
-CAT_FEATURES_OBJ = ["Type_fuel"]
 
 
 def load_raw(path) -> pd.DataFrame:
