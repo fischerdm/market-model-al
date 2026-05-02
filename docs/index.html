@@ -609,6 +609,14 @@
       from unchanged segments.
     </div>
 
+    <div class="callout warn">
+      <strong>AL convergence is carried by the warm start.</strong> After a tariff change,
+      AL strategies fail to recover while SRS and the Cube Method do. This suggests that
+      AL strategies' convergence is largely driven by the warm start — not their
+      informativeness signals. Once the warm start is stale, the signal is noisy and AL
+      has nothing to stand on. SRS keeps sampling representatively and recovers organically.
+    </div>
+
     <h3>Gaussian perturbations vs. ceteris-paribus profiles</h3>
     <p>
       A second research axis tested whether varying all features simultaneously — rather
