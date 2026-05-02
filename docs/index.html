@@ -713,47 +713,36 @@
       multiplicative structure of such models. Actuaries are encouraged to adapt this
       codebase to their own data and pricing engine.
     </p>
+  </section>
 
-    <h3>Adapting to your own tariff</h3>
+  <!-- ── ADAPTING ── -->
+  <section>
+    <h2>Adapting to your own tariff</h2>
     <p>
       The codebase is designed to be adapted to a different pricing engine or market
-      with three changes:
+      with three changes.
     </p>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>Step</th><th>What to do</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>1. Subclass <code>BaseOracle</code></strong></td>
-            <td>
-              Implement <code>query(profiles) → np.ndarray</code>. A multiplicative GLM
-              tariff is a few lines; a GBM loads a model file.
-              <code>OraclePricingEngine</code> already handles the LightGBM case — just
-              point it to your own <code>.pkl</code>.
-            </td>
-          </tr>
-          <tr>
-            <td><strong>2. Update <code>config/features.yaml</code></strong></td>
-            <td>
-              List your continuous features (sweep grids, lower bounds), categorical
-              features, and <code>min_age_at_licensing</code> for the cross-feature
-              constraint. No Python changes needed — the loader propagates these values
-              to <code>constraints.py</code> and <code>profile_generator.py</code>
-              automatically.
-            </td>
-          </tr>
-          <tr>
-            <td><strong>3. Adapt <code>features.py</code></strong></td>
-            <td>
-              Update <code>engineer_features()</code> for your raw-to-engineered column
-              transformations (e.g. date columns → ages). Update <code>_DROP_COLS</code>
-              for columns that are not observable at quote time in your context.
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="callout insight">
+      <strong>1. Subclass <code>BaseOracle</code> and implement <code>query()</code>.</strong>
+      The interface is one method: <code>query(profiles) → np.ndarray</code>. A multiplicative
+      GLM tariff is a few lines of factor arithmetic; a GBM loads a model file.
+      <code>OraclePricingEngine</code> already handles the LightGBM case — just point it
+      to your own <code>.pkl</code>. See <code>base_oracle.py</code> for a worked example.
+    </div>
+    <div class="callout insight">
+      <strong>2. Update <code>config/features.yaml</code>.</strong>
+      List your continuous features with their sweep grids and lower bounds, your categorical
+      features, and <code>min_age_at_licensing</code> for the cross-feature constraint. No
+      Python changes are needed for feature names, ranges, or bounds — the loader propagates
+      these values to <code>constraints.py</code> and <code>profile_generator.py</code>
+      automatically.
+    </div>
+    <div class="callout insight">
+      <strong>3. Adapt <code>features.py</code>.</strong>
+      Update <code>engineer_features()</code> for your raw-to-engineered column
+      transformations (e.g. date columns → ages, tenure calculations). Update
+      <code>_DROP_COLS</code> for columns that are not observable at quote time in
+      your context.
     </div>
     <p>
       The anchor pool is just rows submitted to the oracle — no separate data source is
