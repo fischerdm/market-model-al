@@ -5,7 +5,7 @@
 &nbsp;
 
 [![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B.svg)](https://market-model-al.streamlit.app/)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/fischerdm/market-model-al/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](https://github.com/fischerdm/market-model-al/releases)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
 [![Data DOI](https://img.shields.io/badge/Data-10.17632%2F5cxyb5fp4f.2-orange.svg)](https://doi.org/10.17632/5cxyb5fp4f.2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -130,6 +130,39 @@ Three observations speak against this being a fatal flaw:
 
 All findings are specific to a **gradient boosting oracle**. Whether representativeness retains its advantage over informativeness under simpler, more separable tariff structures is an open question — GLM or GAM-based pricing engines (the traditional standard in non-life insurance) represent a particularly compelling comparison point, since ceteris-paribus profiling was originally motivated by the multiplicative structure of such models. Actuaries are encouraged to adapt this codebase to their own data and pricing engine.
 
+## Adapting to your own tariff
+
+The codebase can be adapted to a different pricing engine or market with three changes:
+
+**1. Subclass `BaseOracle` and implement `query()`**
+
+The interface is one method. A multiplicative GLM tariff is a few lines:
+
+```python
+from market_model_al.base_oracle import BaseOracle
+import numpy as np
+import pandas as pd
+
+class MyGLMTariff(BaseOracle):
+    def query(self, profiles: pd.DataFrame) -> np.ndarray:
+        base = 300.0
+        age_factor   = np.where(profiles["driver_age"] < 25, 1.5, 1.0)
+        power_factor = 1.0 + profiles["Power"].values / 400.0
+        return base * age_factor * power_factor
+```
+
+Pass your oracle to `ALSimulation` in place of `OraclePricingEngine`. For a GBM tariff, `OraclePricingEngine` already handles that case — just point it to your own model file.
+
+**2. Update `config/features.yaml`**
+
+List your continuous features with their sweep grids and lower bounds, your categorical features, and `min_age_at_licensing` for the cross-feature constraint. No Python changes are needed for feature names, ranges, or constraint bounds — the loader in `features_config.py` propagates those values to `constraints.py`, `profile_generator.py`, and `features.py` automatically.
+
+**3. Adapt `features.py`**
+
+Update `engineer_features()` for your raw-to-engineered column transformations (e.g. date columns → ages, market-specific tenure calculations). Update `_DROP_COLS` for columns that are not observable at quote time in your context.
+
+The anchor pool is just rows submitted to the oracle, so no separate data source is needed: the AL loop samples from the engineered portfolio directly. The `market_supplement_ratio` top-up in `create_market_supplement()` handles segments that are under-represented in the portfolio.
+
 ## Project structure
 
 ```
@@ -140,7 +173,9 @@ market-model-al/
 │   │                           #           gaussian_sigma_frac, market_supplement_ratio,
 │   │                           #           market_profile_method, random_market.market_n_anchors,
 │   │                           #           warmup_weeks, warmup_scale
-│   └── tariff_changes.yaml     # named perturbation library (type + params, no timing)
+│   ├── tariff_changes.yaml     # named perturbation library (type + params, no timing)
+│   └── features.yaml           # continuous features (sweep grids, lower bounds),
+│                               # categorical features, constraints.min_age_at_licensing
 ├── data/
 │   ├── raw/                # Lledó & Pavía (2024) data (not committed)
 │   └── processed/          # intermediate processed data (not committed)
@@ -155,9 +190,12 @@ market-model-al/
 │   └── 06_segment_summary.py           # segment distribution analysis + threshold calibration
 ├── src/
 │   └── market_model_al/
-│       ├── features.py           # feature engineering
-│       ├── constraints.py        # physical validity rules (MIN_AGE_AT_LICENSING=18)
-│       ├── oracle_engine.py      # OraclePricingEngine: query(profiles) → prices
+│       ├── base_oracle.py        # BaseOracle ABC: subclass to plug in a custom tariff
+│       ├── features_config.py    # loads features.yaml → CONTINUOUS_FEATURES, DEFAULT_RANGES,
+│       │                         # LOWER_BOUNDS, CAT_FEATURES, MIN_AGE_AT_LICENSING
+│       ├── features.py           # feature engineering (adapt for custom column transformations)
+│       ├── constraints.py        # physical validity rules (values from features.yaml)
+│       ├── oracle_engine.py      # OraclePricingEngine(BaseOracle): query(profiles) → prices
 │       ├── profile_generator.py  # generate_ceteris_paribus, generate_gaussian_profiles,
 │       │                         # create_market_supplement; PROFILES_PER_ANCHOR = 254
 │       ├── competitor_model.py   # CompetitorModel: LightGBM, retrained each iteration
