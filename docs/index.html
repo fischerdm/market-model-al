@@ -715,6 +715,51 @@
     </p>
   </section>
 
+  <!-- ── ADAPTING ── -->
+  <section>
+    <h2>Adapting to your own tariff</h2>
+    <p>
+      The codebase is designed to be adapted to a different pricing engine or market
+      with three changes.
+    </p>
+    <div class="callout insight">
+      <strong>1. Subclass <code>BaseOracle</code> and implement <code>query()</code>.</strong>
+      The interface is one method: <code>query(profiles) → np.ndarray</code>. Three common cases:
+      <ul style="margin: 10px 0 0 20px;">
+        <li><strong>LightGBM pickle</strong> — no subclassing needed. <code>OraclePricingEngine</code>
+          already does <code>joblib.load()</code> + <code>.predict()</code> with the categorical dtype
+          preparation LightGBM expects. Just point it at your file.</li>
+        <li><strong>Other GBM framework</strong> (XGBoost, sklearn, etc.) — a five-line subclass:
+          load the pickle in <code>__init__</code>, call <code>self.validate()</code> then
+          <code>self._model.predict(profiles)</code> in <code>query()</code>.</li>
+        <li><strong>Multiplicative GLM</strong> — implement <code>query()</code> as factor arithmetic:
+          base rate × loading (expense + profit margin) × risk factors. See <code>base_oracle.py</code>
+          for a worked example.</li>
+      </ul>
+    </div>
+    <div class="callout insight">
+      <strong>2. Update <code>config/features.yaml</code>.</strong>
+      List your continuous features with their sweep grids and lower bounds, your categorical
+      features, and <code>min_age_at_licensing</code> for the cross-feature constraint. No
+      Python changes are needed for feature names, ranges, or bounds — the loader propagates
+      these values to <code>constraints.py</code> and <code>profile_generator.py</code>
+      automatically.
+    </div>
+    <div class="callout insight">
+      <strong>3. Adapt <code>features.py</code>.</strong>
+      Update <code>engineer_features()</code> for your raw-to-engineered column
+      transformations (e.g. date columns → ages, tenure calculations). Update
+      <code>_DROP_COLS</code> for columns that are not observable at quote time in
+      your context.
+    </div>
+    <p>
+      The anchor pool is just rows submitted to the oracle — no separate data source is
+      needed. The AL loop samples from the engineered portfolio directly, and
+      <code>create_market_supplement()</code> handles segments that are under-represented
+      in the portfolio.
+    </p>
+  </section>
+
   <!-- ── REPO ── -->
   <section>
     <h2>Explore the project</h2>

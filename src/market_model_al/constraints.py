@@ -3,25 +3,17 @@ Physical validity constraints for motor insurance profiles.
 
 These rules are properties of the feature space, independent of any model.
 Both the oracle engine and the profile generator use this module.
+
+Constraint values (lower bounds and min_age_at_licensing) are loaded from
+config/features.yaml — edit that file to adapt to a different jurisdiction.
 """
 
 import pandas as pd
 
-# Minimum legal driving age and minimum licence-obtaining age.
-MIN_DRIVING_AGE = 18.0
-MIN_AGE_AT_LICENSING = 18.0  # Spain: minimum age to obtain a driving licence
+from market_model_al.features_config import LOWER_BOUNDS, MIN_AGE_AT_LICENSING
 
-# Per-feature lower bounds (upper bounds are not enforced — they are data
-# artefacts, not physical laws).
-LOWER_BOUNDS = {
-    "driver_age":        MIN_DRIVING_AGE,
-    "licence_age":       0.0,
-    "vehicle_age":       0.0,
-    "Power":             1.0,
-    "Cylinder_capacity": 1.0,
-    "Value_vehicle":     1.0,
-    "Seniority":         0.0,
-}
+# Kept for backward compatibility (same value as MIN_AGE_AT_LICENSING = 18).
+MIN_DRIVING_AGE = MIN_AGE_AT_LICENSING
 
 
 def validate(profiles: pd.DataFrame) -> pd.Series:

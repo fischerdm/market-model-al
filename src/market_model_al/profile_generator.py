@@ -37,30 +37,7 @@ import numpy as np
 import pandas as pd
 
 from market_model_al.constraints import validate as _validate
-
-# Continuous features eligible for sweeping.
-CONTINUOUS_FEATURES = [
-    "driver_age",
-    "licence_age",
-    "vehicle_age",
-    "Power",
-    "Cylinder_capacity",
-    "Value_vehicle",
-    "Seniority",
-]
-
-# Default sweep grids — chosen to cover the actuarially relevant range with
-# enough resolution to reveal tariff structure.  Callers may override any
-# subset via the feature_ranges argument.
-DEFAULT_RANGES: dict[str, np.ndarray] = {
-    "driver_age":        np.arange(18, 81, 1),               # 63 values
-    "licence_age":       np.arange(0, 51, 1),                # 51 values
-    "vehicle_age":       np.arange(0, 31, 1),                # 31 values
-    "Power":             np.arange(40, 401, 20),             # 19 values
-    "Cylinder_capacity": np.arange(500, 5001, 250),          # 19 values
-    "Value_vehicle":     np.geomspace(1_000, 80_000, 30),    # 30 log-spaced values
-    "Seniority":         np.arange(0, 41, 1),                # 41 values
-}
+from market_model_al.features_config import CONTINUOUS_FEATURES, DEFAULT_RANGES  # noqa: F401
 
 # Pre-validation upper bound on profiles generated per anchor row.
 # Actual count is lower due to the licence_age <= driver_age - 18 constraint.
