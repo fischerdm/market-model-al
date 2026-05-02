@@ -18,12 +18,12 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from market_model_al.constraints import validate as _validate
-from market_model_al.features import CAT_FEATURES, CAT_FEATURES_OBJ
+from market_model_al.base_oracle import BaseOracle
+from market_model_al.features_config import CAT_FEATURES, CAT_FEATURES_OBJ
 
 
-class OraclePricingEngine:
-    """Stateless pricing oracle: query(profiles) -> premium array.
+class OraclePricingEngine(BaseOracle):
+    """LightGBM-based pricing oracle: query(profiles) -> premium array.
 
     Parameters
     ----------
@@ -35,11 +35,6 @@ class OraclePricingEngine:
         self._oracle = joblib.load(model_path)
 
     # ── public API ────────────────────────────────────────────────────────────
-
-    def validate(self, profiles: pd.DataFrame) -> pd.Series:
-        """Return a boolean Series (index-aligned) — True where the profile
-        is physically valid. Delegates to ``constraints.validate``."""
-        return _validate(profiles)
 
     def query(self, profiles: pd.DataFrame) -> np.ndarray:
         """Return oracle-predicted premiums for *valid* profiles.
