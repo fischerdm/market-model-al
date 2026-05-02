@@ -23,7 +23,7 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    - Excluded features: `Cost_claims_year`, `N_claims_year` — current-year outcomes, not observable at quote time
    - `N_claims_history` and `R_Claims_history` also excluded — in practice scraping is done with claim history set to 0 (standardised input on aggregators like comparis.ch), so this matches real-world scraping behaviour
    - Raw date columns engineered to ages/durations instead
-   - `licence_age` = years since obtaining the licence (driving experience), NOT age at licensing; the physical constraint is `licence_age <= driver_age - MIN_AGE_AT_LICENSING` where `MIN_AGE_AT_LICENSING = 18` (Spain)
+   - `licence_age` = years since obtaining the licence (driving experience), NOT age at licensing; the physical constraint is `licence_age <= driver_age - MIN_AGE_AT_LICENSING` where `MIN_AGE_AT_LICENSING = 18` (Spain) — value loaded from `config/features.yaml`, not hardcoded
 
 2. **AL simulation loop (Phase 2)**
 
@@ -73,7 +73,7 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
 
    **Seed design**: per-run RNG is derived deterministically as `sha256(base_seed:simulation_name:strategy)`. Each (simulation, strategy) pair always gets the same seed regardless of call order or whether strategies are run in separate executions. Holdout is carved once in `ALSimulation.__init__` from `_master_rng` (unaffected). `run()` accepts `simulation_name: str = ""` for seed derivation.
 
-   **Tariff change simulation** (`PerturbedOracleEngine` in `perturbed_oracle.py`):
+   **Tariff change simulation** (`PerturbedOracleEngine(BaseOracle)` in `perturbed_oracle.py`):
    - A perturbed oracle applies a systematic premium shift (e.g. young-driver surcharge +20%, uniform reprice, area repricing, compose for stacked shocks)
    - Each named **simulation** defines its own `tariff_changes` timeline — a sorted list of `(week, perturbed_oracle)` pairs applied within one continuous run
    - Multiple oracle switches in one run are supported; holdout labels switch at each change
@@ -82,7 +82,10 @@ The real dataset is treated as the competitor's actual tariff. The oracle learns
    **Configuration system** (`config/`):
    - `config/simulation.yaml` — global params (n_weeks, weekly_budget, seed, strategies, metrics, restart_strategies) and a `simulations` list; `advanced:` block contains `anchor_space_multiplier`, `selection_fraction`, `gaussian_sigma_frac`, `market_supplement_ratio`, `market_profile_method`, `random_market.market_n_anchors`, `cube_method.cube_pool_multiplier`, `warmup_weeks`, `warmup_scale`
    - `config/tariff_changes.yaml` — named perturbation library; definitions only, no timing
+   - `config/features.yaml` — single source of truth for continuous feature sweep grids and lower bounds, categorical features, and `min_age_at_licensing`; loaded by `src/market_model_al/features_config.py` which exports constants consumed by `features.py`, `constraints.py`, and `profile_generator.py`
    - `src/market_model_al/config.py` — loader, resolver, perturbation factory
+   - `src/market_model_al/features_config.py` — loads `config/features.yaml` at import time; exports `CONTINUOUS_FEATURES`, `DEFAULT_RANGES`, `LOWER_BOUNDS`, `CAT_FEATURES`, `CAT_FEATURES_OBJ`, `MIN_AGE_AT_LICENSING`
+   - `src/market_model_al/base_oracle.py` — `BaseOracle` ABC; `OraclePricingEngine` and `PerturbedOracleEngine` both inherit from it. Subclass and implement `query()` to plug in a custom tariff.
 
    **Core research questions**:
    1. Does the AL strategy rediscover systematic ceteris paribus profiling on its own?
