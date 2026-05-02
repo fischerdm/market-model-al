@@ -31,10 +31,12 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
+from market_model_al.base_oracle import BaseOracle
+
 
 # ── Engine ─────────────────────────────────────────────────────────────────────
 
-class PerturbedOracleEngine:
+class PerturbedOracleEngine(BaseOracle):
     """Wraps an OraclePricingEngine and applies a post-prediction perturbation.
 
     Parameters
