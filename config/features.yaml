@@ -1,0 +1,81 @@
+# Feature definitions for the AL simulation.
+#
+# Edit this file to adapt the oracle/profiler to a different tariff or market.
+# Three sections:
+#   continuous   — features swept by the profile generators (CP and Gaussian)
+#   categorical  — features cast to Categorical dtype for LightGBM
+#   constraints  — physical validity rules applied across all strategies
+#
+# To plug in a custom tariff:
+#   1. Subclass BaseOracle and implement query()  (see base_oracle.py)
+#   2. Update this file to match your feature names and ranges
+#   3. Adapt features.py for your raw-to-engineered column transformations
+
+continuous:
+  driver_age:
+    lower_bound: 18.0
+    sweep:
+      type: arange
+      start: 18
+      stop: 81
+      step: 1          # 63 grid points
+  licence_age:
+    lower_bound: 0.0
+    sweep:
+      type: arange
+      start: 0
+      stop: 51
+      step: 1          # 51 grid points
+  vehicle_age:
+    lower_bound: 0.0
+    sweep:
+      type: arange
+      start: 0
+      stop: 31
+      step: 1          # 31 grid points
+  Power:
+    lower_bound: 1.0
+    sweep:
+      type: arange
+      start: 40
+      stop: 401
+      step: 20         # 19 grid points
+  Cylinder_capacity:
+    lower_bound: 1.0
+    sweep:
+      type: arange
+      start: 500
+      stop: 5001
+      step: 250        # 19 grid points
+  Value_vehicle:
+    lower_bound: 1.0
+    sweep:
+      type: geomspace
+      start: 1000
+      stop: 80000
+      npoints: 30      # 30 log-spaced points
+  Seniority:
+    lower_bound: 0.0
+    sweep:
+      type: arange
+      start: 0
+      stop: 41
+      step: 1          # 41 grid points
+
+# Total pre-validation profiles per anchor = 63+51+31+19+19+30+41 = 254
+
+categorical:
+  int_coded:
+    - Distribution_channel
+    - Payment
+    - Type_risk
+    - Area
+    - Second_driver
+    - N_doors
+  object_coded:
+    - Type_fuel
+
+constraints:
+  # Minimum age (years) to obtain a driving licence in this market.
+  # Used in: licence_age <= driver_age - min_age_at_licensing
+  min_age_at_licensing: 18.0   # Spain (adjust for your jurisdiction)
