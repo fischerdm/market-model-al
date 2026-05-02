@@ -102,6 +102,7 @@ The central tension is the **exploration-exploitation tradeoff**: informativenes
 | **Root cause: exploration vs. exploitation** | Greedy informativeness (exploitation) pulls budget toward high-signal edge cases, starving mainstream segments. Representative sampling (exploration) covers the market proportionally by construction — and that is sufficient. |
 | **Continuous scraping outperforms restart** | After a targeted tariff change, a full restart discards valid labels from unchanged segments. Continuous scraping can win on global RMSE at week 10. |
 | **Disruption-adaptive** | Uses the week-on-week *change* in segment RMSE as a signal, not the absolute level. Fires on disruption, reverts to random once the gap closes, discards no labels. |
+| **AL convergence is carried by the warm start** | After a tariff change, AL strategies fail to recover while SRS and the Cube Method do. This suggests AL strategies' convergence is largely driven by the warm start, not their informativeness signals — once the warm start is stale, the signal is noisy and AL has nothing to stand on. SRS keeps sampling representatively and recovers organically. |
 
 ## Survey sampling perspective
 
