@@ -130,39 +130,6 @@ Three observations speak against this being a fatal flaw:
 
 All findings are specific to a **gradient boosting oracle**. Whether representativeness retains its advantage over informativeness under simpler, more separable tariff structures is an open question — GLM or GAM-based pricing engines (the traditional standard in non-life insurance) represent a particularly compelling comparison point, since ceteris-paribus profiling was originally motivated by the multiplicative structure of such models. Actuaries are encouraged to adapt this codebase to their own data and pricing engine.
 
-## Adapting to your own tariff
-
-The codebase can be adapted to a different pricing engine or market with three changes:
-
-**1. Subclass `BaseOracle` and implement `query()`**
-
-The interface is one method. A multiplicative GLM tariff is a few lines:
-
-```python
-from market_model_al.base_oracle import BaseOracle
-import numpy as np
-import pandas as pd
-
-class MyGLMTariff(BaseOracle):
-    def query(self, profiles: pd.DataFrame) -> np.ndarray:
-        base = 300.0
-        age_factor   = np.where(profiles["driver_age"] < 25, 1.5, 1.0)
-        power_factor = 1.0 + profiles["Power"].values / 400.0
-        return base * age_factor * power_factor
-```
-
-Pass your oracle to `ALSimulation` in place of `OraclePricingEngine`. For a GBM tariff, `OraclePricingEngine` already handles that case — just point it to your own model file.
-
-**2. Update `config/features.yaml`**
-
-List your continuous features with their sweep grids and lower bounds, your categorical features, and `min_age_at_licensing` for the cross-feature constraint. No Python changes are needed for feature names, ranges, or constraint bounds — the loader in `features_config.py` propagates those values to `constraints.py`, `profile_generator.py`, and `features.py` automatically.
-
-**3. Adapt `features.py`**
-
-Update `engineer_features()` for your raw-to-engineered column transformations (e.g. date columns → ages, market-specific tenure calculations). Update `_DROP_COLS` for columns that are not observable at quote time in your context.
-
-The anchor pool is just rows submitted to the oracle, so no separate data source is needed: the AL loop samples from the engineered portfolio directly. The `market_supplement_ratio` top-up in `create_market_supplement()` handles segments that are under-represented in the portfolio.
-
 ## Project structure
 
 ```
@@ -247,6 +214,39 @@ pip install -e ".[dev]"
 # Dashboard
 streamlit run app.py
 ```
+
+## Adapting to your own tariff
+
+The codebase can be adapted to a different pricing engine or market with three changes:
+
+**1. Subclass `BaseOracle` and implement `query()`**
+
+The interface is one method. A multiplicative GLM tariff is a few lines:
+
+```python
+from market_model_al.base_oracle import BaseOracle
+import numpy as np
+import pandas as pd
+
+class MyGLMTariff(BaseOracle):
+    def query(self, profiles: pd.DataFrame) -> np.ndarray:
+        base = 300.0
+        age_factor   = np.where(profiles["driver_age"] < 25, 1.5, 1.0)
+        power_factor = 1.0 + profiles["Power"].values / 400.0
+        return base * age_factor * power_factor
+```
+
+Pass your oracle to `ALSimulation` in place of `OraclePricingEngine`. For a GBM tariff, `OraclePricingEngine` already handles that case — just point it to your own model file.
+
+**2. Update `config/features.yaml`**
+
+List your continuous features with their sweep grids and lower bounds, your categorical features, and `min_age_at_licensing` for the cross-feature constraint. No Python changes are needed for feature names, ranges, or constraint bounds — the loader in `features_config.py` propagates those values to `constraints.py`, `profile_generator.py`, and `features.py` automatically.
+
+**3. Adapt `features.py`**
+
+Update `engineer_features()` for your raw-to-engineered column transformations (e.g. date columns → ages, market-specific tenure calculations). Update `_DROP_COLS` for columns that are not observable at quote time in your context.
+
+The anchor pool is just rows submitted to the oracle, so no separate data source is needed: the AL loop samples from the engineered portfolio directly. The `market_supplement_ratio` top-up in `create_market_supplement()` handles segments that are under-represented in the portfolio.
 
 ## Data
 
