@@ -230,10 +230,11 @@ import pandas as pd
 
 class MyGLMTariff(BaseOracle):
     def query(self, profiles: pd.DataFrame) -> np.ndarray:
-        base = 300.0
+        base         = 300.0
+        loading      = 1.20   # expense + profit margin loading
         age_factor   = np.where(profiles["driver_age"] < 25, 1.5, 1.0)
         power_factor = 1.0 + profiles["Power"].values / 400.0
-        return base * age_factor * power_factor
+        return base * loading * age_factor * power_factor
 ```
 
 **LightGBM pickle** — no subclassing needed. `OraclePricingEngine` already does `joblib.load()` + `.predict()` with the categorical dtype preparation LightGBM expects. Just point it at your file:

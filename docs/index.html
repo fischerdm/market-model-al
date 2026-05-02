@@ -732,8 +732,9 @@
         <li><strong>Other GBM framework</strong> (XGBoost, sklearn, etc.) — a five-line subclass:
           load the pickle in <code>__init__</code>, call <code>self.validate()</code> then
           <code>self._model.predict(profiles)</code> in <code>query()</code>.</li>
-        <li><strong>Multiplicative GLM</strong> — implement <code>query()</code> as factor arithmetic
-          directly. See <code>base_oracle.py</code> for a worked example.</li>
+        <li><strong>Multiplicative GLM</strong> — implement <code>query()</code> as factor arithmetic:
+          base rate × loading (expense + profit margin) × risk factors. See <code>base_oracle.py</code>
+          for a worked example.</li>
       </ul>
     </div>
     <div class="callout insight">
