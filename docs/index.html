@@ -719,6 +719,14 @@
   <section>
     <h2>Adapting to your own tariff</h2>
     <p>
+      Using your own tariff as the oracle is a natural validation move. Three reasons:
+    </p>
+    <ul style="margin: 0 0 14px 20px;">
+      <li><strong>Your market</strong> — validate the results for your geography and portfolio mix</li>
+      <li><strong>Your model type</strong> — test whether the findings change under a GLM, GAM, or other structure</li>
+      <li><strong>Clean oracle</strong> — your tariff is the exact ground truth, free of noise from model fitting</li>
+    </ul>
+    <p>
       The codebase is designed to be adapted to a different pricing engine or market
       with three changes.
     </p>
@@ -751,6 +759,13 @@
       transformations (e.g. date columns → ages, tenure calculations). Update
       <code>_DROP_COLS</code> for columns that are not observable at quote time in
       your context.
+    </div>
+    <div class="callout">
+      <strong>4. Optionally update <code>segments.py</code>.</strong>
+      The four segment thresholds (young drivers &lt; 30, high-value cars &gt; €28k,
+      high-power &gt; 130hp, seniors ≥ 65) are specific to the Spanish portfolio.
+      Update them to define commercially relevant segments for your market — used for
+      segment-level RMSE diagnostics only; the simulation runs without this step.
     </div>
     <p>
       The anchor pool is just rows submitted to the oracle — no separate data source is

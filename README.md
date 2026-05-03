@@ -217,6 +217,12 @@ streamlit run app.py
 
 ## Adapting to your own tariff
 
+Using your own tariff as the oracle is a natural validation move. Three reasons:
+
+- **Your market** — validate the results for your geography and portfolio mix
+- **Your model type** — test whether the findings change under a GLM, GAM, or other structure
+- **Clean oracle** — your tariff is the exact ground truth, free of noise from model fitting
+
 The codebase can be adapted to a different pricing engine or market with three changes:
 
 **1. Subclass `BaseOracle` and implement `query()`**
@@ -269,6 +275,10 @@ List your continuous features with their sweep grids and lower bounds, your cate
 **3. Adapt `features.py`**
 
 Update `engineer_features()` for your raw-to-engineered column transformations (e.g. date columns → ages, market-specific tenure calculations). Update `_DROP_COLS` for columns that are not observable at quote time in your context.
+
+**4. Optionally update `segments.py`**
+
+The four segment thresholds (young drivers < 30, high-value cars > €28k, high-power > 130hp, seniors ≥ 65) are specific to the Spanish portfolio. Update them to define commercially relevant segments for your market — used for segment-level RMSE diagnostics only; the simulation runs without this step.
 
 The anchor pool is just rows submitted to the oracle, so no separate data source is needed: the AL loop samples from the engineered portfolio directly. The `market_supplement_ratio` top-up in `create_market_supplement()` handles segments that are under-represented in the portfolio.
 
